@@ -1,8 +1,9 @@
 # Backend Blueprint — Gorgan Horse Federation Panel
 
-**Version:** Final (no versioning, no phasing — this is the production-ready specification)
 **Document type:** Master Blueprint
-**Companion documents:** Technical, User Usage, Proposal
+**Companion documents:** Technical, User Usage, Project Proposal
+**Status:** Final, production-ready, no phasing, no versioning
+**Audience:** Implementers, reviewers, maintainers, product stakeholders
 
 ---
 
@@ -13,40 +14,46 @@
 3. Scope
 4. Roles & Permissions
 5. Folder Structure
-6. Database Schema
-7. Domain Model & Flows
-8. HTTP Envelope
-9. Routes
-10. Middleware Pipeline
-11. Authorization Matrix
-12. Reports & KPIs
-13. Integrations
-14. Settings Registry
-15. Seed Data Principles
-16. Printing & QR
-17. Notifications & Messaging
-18. File Uploads & Media
-19. Caching & Logging
-20. Backup / Restore / Reset / Demo
-21. Installer
-22. Security
-23. Deployment & Portability
+6. Domain Glossary
+7. Database Schema
+8. Domain Model & Flows
+9. HTTP Envelope
+10. Routes
+11. Middleware Pipeline
+12. Authorization Matrix
+13. Reports & KPIs
+14. Integrations
+15. Settings Registry
+16. Seed Data Principles
+17. Printing & QR
+18. Notifications & Messaging
+19. File Uploads & Media
+20. Caching & Logging
+21. Backup / Restore / Reset / Demo
+22. Installer
+23. Security
+24. Naming Conventions
+25. Error Codes
+26. Implementation Checklist
+27. Risk Register & Prerequisites
+28. Deployment & Portability
+29. Closing Notes
 
 ---
 
 ## 1. Overview
 
-The Gorgan Horse Federation Panel is a **monolithic PHP 8.x web panel** for managing horse-riding competitions in Golestan province, Iran. It is a **single-host, no-framework, RTL-first, fa-IR-first, Shamsi-aware** application that serves the federation's internal operations: clubs, riders, horses, rades, competitions, signups, payments, results, and reporting.
+The Gorgan Horse Federation Panel is a **monolithic PHP 8.x web panel** for managing horse-riding competitions in Golestan province, Iran. It is a **single-host, no-framework, RTL-first, fa-IR-first, Shamsi-aware** application serving federation internal operations: clubs, riders, horses, rades, competitions, signups, payments, results, and reporting.
 
-The panel is hosted on a **subdomain** (e.g. `panel.gorganhorse.ir`). The public-facing site (landing pages, blog, SEO) is handled separately by WordPress on the main domain. There is **no session sharing** between the two systems.
+The panel is hosted on a **subdomain** (e.g. `panel.gorganhorse.ir`). The public site (landing pages, blog, SEO) is handled separately by WordPress on the main domain. There is **no session sharing** between the two systems.
 
 The panel is **authenticated-only** for all users (Admin, Manager, Rider, Club). The only public endpoints are the ZarinPal payment callbacks.
 
 ### 1.1 Audience
 
 - **Implementers** — this document is the contract. Every architectural decision here is final.
-- **Owners** — read the Proposal document for the executive summary.
-- **Reviewers** — read Principles + Technical documents.
+- **Owners** — read the Project Proposal document for the executive summary.
+- **Reviewers** — read Principles (§2), Naming (§24), Error Codes (§25), and the Technical document.
 
 ### 1.2 Non-negotiable facts
 
@@ -225,7 +232,7 @@ Hard delete with defined cascade rules, except:
 ### P24 — Seed data is rich
 
 - Seed data must produce a **working agency view over one year of operation**.
-- Reference principles in §15 for volume, variety, and validity.
+- Reference principles in §16 for volume, variety, and validity.
 
 ### P25 — Culture is Iran-Tehran specific
 
@@ -333,7 +340,7 @@ Hard delete with defined cascade rules, except:
 
 **Rider** — manages own profile, own horses, own signups. Views own reports. Can share reports to Managers/Admins only.
 
-**Club** — manages own profile. Views affiliated riders, competitions at own venue, own bans. Full report access scoped to own club.
+**Club** — manages own profile. Views affiliated riders, competitions at own venue, own bans. Full report access scoped to own club. Cannot share reports.
 
 ### 4.2 Disable states
 
@@ -352,11 +359,18 @@ Users (Riders and Clubs) can be in one of three states:
 
 ## 5. Folder Structure
 
-Merged structure. Target ~40 PHP files in `app/`.
+Merged structure per P23. Target ~40 PHP files in `app/`.
 
 ```
 /
 ├── .htaccess                          # → /public
+├── README.md                          # project index
+├── documents/
+│   ├── README.md                      # documents index
+│   ├── Backend Blueprint — Gorgan Horse Federation Panel.md
+│   ├── Technical — Gorgan Horse Federation Panel.md
+│   ├── User Usage — Gorgan Horse Federation Panel.md
+│   └── Project Proposal — Gorgan Horse Federation Panel.md
 ├── public/
 │   ├── index.php                      # single front controller
 │   ├── .htaccess
@@ -367,66 +381,66 @@ Merged structure. Target ~40 PHP files in `app/`.
 │       │   ├── panel.css
 │       │   └── print.css
 │       ├── js/
-│       │   ├── app.js                 # Alpine bootstrap, helpers, tooltips
-│       │   ├── grid.js                # AG Grid wrapper, state persistence
-│       │   ├── qr.js                  # QR generator
+│       │   ├── app.js
+│       │   ├── grid.js
+│       │   ├── qr.js
 │       │   └── vendor/
 │       ├── fonts/
 │       └── img/
 ├── app/
 │   ├── Bootstrap/
-│   │   └── App.php                    # Container, Router, Request, Response, Envelope, Database, LogDatabase
+│   │   └── App.php
 │   ├── Http/
 │   │   ├── Kernel.php
-│   │   ├── Middleware.php             # all middleware classes
+│   │   ├── Middleware.php
 │   │   ├── routes.php
 │   │   └── Controllers/
-│   │       ├── AuthController.php     # auth, login, signup, captcha, OTP, logout
+│   │       ├── AuthController.php
 │   │       ├── DashboardController.php
-│   │       ├── UserController.php     # users, profile, sessions, impersonation
-│   │       ├── ClubController.php     # clubs, bans
-│   │       ├── HorseController.php    # horses, images, shares, transfers, import/export
+│   │       ├── UserController.php
+│   │       ├── ClubController.php
+│   │       ├── HorseController.php
 │   │       ├── RadeController.php
-│   │       ├── PaymentController.php  # templates, orders, callbacks
-│   │       ├── CompetitionController.php  # competitions + competition_rades
-│   │       ├── SignupController.php   # signups + rider signup flow
+│   │       ├── PaymentController.php
+│   │       ├── CompetitionController.php
+│   │       ├── SignupController.php
 │   │       ├── ResultController.php
-│   │       ├── ReportController.php   # reports + shares
-│   │       ├── NotificationController.php  # notifications + messages
-│   │       ├── SettingsController.php  # settings + sms + payment config
-│   │       ├── AdminController.php    # backups, maintenance, audit
-│   │       └── PrintController.php    # print + qr
+│   │       ├── ReportController.php
+│   │       ├── NotificationController.php
+│   │       ├── SettingsController.php
+│   │       ├── AdminController.php
+│   │       └── PrintController.php
 │   ├── Services/
-│   │   ├── AuthService.php            # auth, sessions, rate limiting, captcha, OTP
-│   │   ├── UserService.php            # users, rider profile, impersonation
+│   │   ├── AuthService.php
+│   │   ├── UserService.php
 │   │   ├── ClubService.php
-│   │   ├── HorseService.php           # horses, transfers, shares, images
+│   │   ├── HorseService.php
 │   │   ├── RadeService.php
-│   │   ├── PaymentService.php         # templates, orders, ZarinPal gateway
-│   │   ├── CompetitionService.php     # competitions, rades
+│   │   ├── PaymentService.php
+│   │   ├── CompetitionService.php
 │   │   ├── SignupService.php
 │   │   ├── ResultService.php
-│   │   ├── BanService.php             # club bans + admin/manager bans
-│   │   ├── NotificationService.php    # notifications + broadcast messages
-│   │   ├── SmsService.php             # MelyPayamak + OTP
-│   │   ├── CultureService.php         # culture, translation, calendar
+│   │   ├── BanService.php
+│   │   ├── NotificationService.php
+│   │   ├── SmsService.php
+│   │   ├── CultureService.php
 │   │   ├── SettingService.php
 │   │   ├── CacheService.php
-│   │   ├── LogService.php             # logger, audit, changelog
-│   │   ├── MediaService.php           # upload, image processing
+│   │   ├── LogService.php
+│   │   ├── MediaService.php
 │   │   ├── Report/
-│   │   │   ├── ReportEngine.php       # Registry + Runner + QueryBuilder + Share
+│   │   │   ├── ReportEngine.php
 │   │   │   ├── KpiService.php
-│   │   │   └── Reports.php            # all report classes in one file
+│   │   │   └── Reports.php
 │   │   └── Admin/
-│   │       ├── BackupService.php      # backup, restore, reset
+│   │       ├── BackupService.php
 │   │       └── DemoSeeder.php
 │   ├── Support/
-│   │   └── Helpers.php                # Str, Arr, Hash, Uuid, Clock, Path, Validator, Sanitizer, NationalId, PersianDigits
+│   │   └── Helpers.php
 │   ├── Exceptions/
-│   │   └── Exceptions.php             # all exception classes + Handler
+│   │   └── Exceptions.php
 │   ├── Models/
-│   │   └── Models.php                 # all model classes in one file
+│   │   └── Models.php
 │   └── Views/
 │       ├── layouts/
 │       │   ├── panel.php
@@ -485,13 +499,13 @@ Merged structure. Target ~40 PHP files in `app/`.
 │           ├── 500.php
 │           └── maintenance.php
 ├── database/
-│   ├── app.sqlite                     # runtime, gitignored
-│   ├── logs.sqlite                    # runtime, gitignored
-│   ├── schema.sql                     # main schema
-│   ├── schema_logs.sql                # logs schema
+│   ├── app.sqlite
+│   ├── logs.sqlite
+│   ├── schema.sql
+│   ├── schema_logs.sql
 │   ├── upgrades/
 │   └── seeds/
-│       ├── demo.php                   # rich demo data (see §15)
+│       ├── demo.php
 │       └── reference.php
 ├── cultures/
 │   ├── fa-IR.json
@@ -502,9 +516,6 @@ Merged structure. Target ~40 PHP files in `app/`.
 │   ├── horses/
 │   ├── clubs/
 │   └── demo/
-├── storage/
-│   ├── shares/
-│   └── tmp/
 ├── cache/
 │   ├── .htaccess
 │   ├── settings/
@@ -521,39 +532,76 @@ Merged structure. Target ~40 PHP files in `app/`.
 │   ├── giggsey/libphonenumber-for-php/
 │   ├── ezyang/htmlpurifier/
 │   └── intervention/image/
-├── docs/
-│   ├── BLUEPRINT.md
-│   ├── TECHNICAL.md
-│   ├── USER-USAGE.md
-│   ├── PROPOSAL.md
-│   └── nginx.conf.sample
-└── README.md
+└── docs/
+    └── nginx.conf.sample
 ```
+
+**Note:** The Technical document is the authority on file merging (P23). The Blueprint folder structure illustrates the target; specific class-to-file assignments follow Technical §4.3.
+
+**Removed from earlier drafts:** `storage/shares/` (snapshots dropped), `ui.theme` setting (no dark mode).
+
+**Reserved (present in schema, unused):** `password_resets`, `api_tokens`.
 
 ---
 
-## 6. Database Schema
+## 6. Domain Glossary
+
+Every Persian term used in the panel, its English equivalent, and a one-line definition.
+
+| Persian | English | Definition |
+|---|---|---|
+| رده | Rade | A reusable competition class definition (e.g. رده E, رده D1). |
+| سوارکار | Rider | A user who rides horses and signs up for competitions. |
+| اسب | Horse | A registered horse owned by exactly one rider. |
+| باشگاه | Club | A federated club; can host competitions and/or serve as a rider's affiliation. |
+| مسابقه | Competition | An event at a venue, with a registration window and a date. |
+| شرکت در مسابقه | Signup | A rider entering a horse into a Rade of a Competition. |
+| اسب جایگزین | Replacement horse | (Deprecated in favor of shares) A horse shared to a rider by another owner. |
+| انتقال | Transfer | Handing ownership of a horse from one rider to another. |
+| اشتراک | Share | Allowing another rider to use your horse in a signup. |
+| تحریم | Ban | A forward-looking restriction on a rider or horse. |
+| ممنوعیت | Disable | A user-level state blocking login (full) or modification (limited). |
+| باراژ | Barrage | A tie-breaker round; recorded as a flag + notes per Competition-Rade. |
+| ثبت‌نام | Registration | The act of registering for a competition. |
+| صورت‌حساب | Payment Order | The ZarinPal transaction record for a signup. |
+| مبلغ | Amount | Money in IRT (Toman), integer only. |
+| الگوی پرداخت | Payment Template | A reusable price definition, bound to Competition-Rades. |
+| کد اشتراک | Share code | A 6-digit code generated per (owner, horse, recipient). |
+| کد انتقال | Transfer code | An 8-char code generated per transfer request. |
+| مقام | Position | Final rank in a Rade (1st, 2nd, ...). |
+| برنده | Winner | A boolean flag on a signup. |
+| رده‌بندی | Standings | Aggregated performance across competitions. |
+| تأیید | Verification | Rider account approval by Manager (or auto after 48h). |
+| محدودیت | Limited state | User can log in but cannot create/modify records. |
+| مسدودی | Full disable | User cannot log in. |
+| جعل هویت | Impersonation | Admin acting as another user. |
+| لاگ تغییرات | Changelog | Summary of Manager actions for Admin review. |
+| لاگ حسابرسی | Audit log | Full write trail with actor, target, diff. |
+
+---
+
+## 7. Database Schema
 
 The main DB (`app.sqlite`) holds operational data. The logs DB (`logs.sqlite`) holds audit, app logs, login attempts, SMS logs, OTP codes, and changelog.
 
-Both databases are initialized from `schema.sql` and `schema_logs.sql` respectively. Foreign keys are enabled in both. WAL mode is used. Busy timeout is 5 seconds.
+Both databases are initialized from `schema.sql` and `schema_logs.sql`. Foreign keys enabled. WAL mode. Busy timeout 5s.
 
-### 6.1 Main DB tables
+### 7.1 Main DB tables
 
 | Table | Purpose |
 |---|---|
 | `users` | All accounts (Admin, Manager, Rider, Club) |
-| `rider_profiles` | Rider-specific metadata (national ID, insurance, avatar, age category) |
+| `rider_profiles` | Rider-specific metadata |
 | `sessions` | DB-backed sessions |
 | `clubs` | Club profiles + linked club user account |
 | `club_bans` | Clubs banning riders/horses from affiliation |
 | `rider_bans` | Admin/Manager bans (global, competition, rade) |
-| `horse_races` | Controlled vocabulary — horse races |
-| `horse_colors` | Controlled vocabulary — horse colors |
+| `horse_races` | Controlled vocabulary — races |
+| `horse_colors` | Controlled vocabulary — colors |
 | `horse_genders` | Controlled vocabulary — genders |
 | `horses` | Horse records |
-| `horse_images` | Horse gallery (max 5 per horse) |
-| `horse_transfers` | Transfer requests between owners |
+| `horse_images` | Horse gallery (max 5) |
+| `horse_transfers` | Transfer requests |
 | `horse_shares` | Owner shares horse to specific rider |
 | `rades` | Reusable class definitions |
 | `payments` | Reusable price templates |
@@ -561,40 +609,40 @@ Both databases are initialized from `schema.sql` and `schema_logs.sql` respectiv
 | `competition_rades` | Bind Rade + Payment + capacity + auto-confirm |
 | `signups` | Rider × Horse × Competition-Rade |
 | `payment_orders` | ZarinPal order lifecycle |
-| `notifications` | In-panel notifications per user |
+| `notifications` | In-panel notifications |
 | `messages` | Broadcast messages |
-| `message_recipients` | Broadcast message recipients |
+| `message_recipients` | Broadcast recipients |
 | `report_shares` | In-panel report shares |
 | `media` | Uploaded files |
 | `settings` | Rich settings registry |
 | `cultures` | Culture list |
 | `rate_limits` | Generic rate limiting |
-| `password_resets` | Manager-triggered reset tokens |
-| `api_tokens` | Reserved for future API access |
+| `password_resets` | Reserved (manager-triggered reset) |
+| `api_tokens` | Reserved (future API access) |
 
-### 6.2 Logs DB tables
+### 7.2 Logs DB tables
 
 | Table | Purpose |
 |---|---|
-| `audit_logs` | Audit trail of all writes |
-| `app_logs` | Application errors, warnings, slow queries |
-| `login_attempts` | Failed/blocked login attempts |
-| `sms_logs` | Outbound SMS records |
-| `otp_codes` | OTP codes |
-| `changelog` | Manager action summary for Admin |
+| `audit_logs` | Every write with actor, target, diff |
+| `app_logs` | Errors, warnings, slow queries |
+| `login_attempts` | Failed and blocked logins |
+| `sms_logs` | Outbound SMS |
+| `otp_codes` | Hashed OTP codes |
+| `changelog` | Manager action summaries |
 
-### 6.3 Schema files
+### 7.3 Schema files
 
-- `database/schema.sql` — main DB DDL. Every table has a header comment.
-- `database/schema_logs.sql` — logs DB DDL.
+- `database/schema.sql` — main DB DDL with per-column comments.
+- `database/schema_logs.sql` — logs DB DDL with per-column comments.
 
-**Every column is documented** in the schema file with a one-line comment. See `schema.sql` for full DDL; the DDL is not reproduced in this document.
+Full DDL is not reproduced in this document; it lives in the schema files and follows the entity list in §7.1–7.2. Every column is documented in the schema file with a one-line comment.
 
 ---
 
-## 7. Domain Model & Flows
+## 8. Domain Model & Flows
 
-### 7.1 Core entities
+### 8.1 Core entities
 
 - **Club** — profile + linked user account. Can be a venue (host) and/or an affiliation (rider's chosen club).
 - **Horse** — owned by exactly one Rider. Can be shared to other Riders. Can be transferred.
@@ -605,73 +653,75 @@ Both databases are initialized from `schema.sql` and `schema_logs.sql` respectiv
 - **Signup** — a Rider entering a Horse into a Competition-Rade.
 - **Payment Order** — the ZarinPal transaction lifecycle for a signup.
 
-### 7.2 Key flows
+### 8.2 Key flows
 
-#### 7.2.1 Rider signup flow
+#### 8.2.1 Rider signup flow
 
 1. Rider logs in (username/password or phone/OTP if SMS enabled).
-2. Rider opens "Competitions" page → sees open competitions.
-3. Rider opens a competition → sees its Rades.
-4. Rider picks a Rade → picks a Horse (own or shared to them) → picks an affiliation Club → confirms.
-5. System creates a `signup` row (`pending_payment`) + a `payment_order` row (`pending`) + snapshots the Payment data into the signup.
+2. Opens "Competitions" → sees open competitions.
+3. Opens a competition → sees its Rades.
+4. Picks a Rade → picks a Horse (own or shared to them) → picks an affiliation Club → confirms.
+5. System creates a `signup` row (`pending_payment`) + a `payment_order` row (`pending`) + snapshots Payment data into the signup.
 6. System calls ZarinPal request → gets `authority` → saves it → redirects to ZarinPal.
 7. Rider pays → ZarinPal redirects to `/payment/callback`.
-8. Callback verifies → order becomes `paid` → signup becomes `paid` → if `auto_confirm=1`, signup becomes `confirmed`; else `paid` awaits Manager confirmation.
+8. Callback verifies → order becomes `paid` → signup becomes `paid` → if `auto_confirm=1`, signup becomes `confirmed`; else awaits Manager confirmation.
 9. Rider gets a panel notification (and SMS if enabled).
 
-#### 7.2.2 Horse transfer flow
+**Free signups:** if `amount_irt = 0`, ZarinPal is skipped. Signup goes directly to `paid`, or to `confirmed` if `auto_confirm=1`.
 
-1. Current owner opens Horse detail → clicks "Initiate Transfer" → system locks the horse (no new signups allowed), resets the share code.
+#### 8.2.2 Horse transfer flow
+
+1. Current owner opens Horse detail → "Initiate Transfer" → locks the horse, resets the share code.
 2. System generates a transfer code → owner shares it with the buyer.
-3. Buyer enters the code → sees general owner info (safe data only) → submits.
+3. Buyer enters the code → sees general owner info → submits.
 4. Owner sees the buyer's general info → accepts or rejects.
-5. On accept: `horse.owner_user_id` changes; transfer row is marked `completed`; horse is unlocked.
-6. On reject: transfer row is marked `rejected`; the code remains valid; buyer can retry.
+5. On accept: ownership changes; transfer marked `completed`; horse unlocked.
+6. On reject: transfer marked `rejected`; code remains valid; buyer can retry.
 7. Historical signups remain attached to the horse.
 
-#### 7.2.3 Horse share flow
+#### 8.2.3 Horse share flow
 
-1. Owner opens Horse detail → clicks "Share" → enters the receiving Rider's 6-digit share code (or selects them by username) → system creates a `horse_share` row.
+1. Owner opens Horse detail → "Share" → enters the receiving Rider's 6-digit share code → system creates a `horse_share`.
 2. The receiving Rider sees the horse in their signup Horse picker.
 3. The displayed name clearly indicates "Shared by [owner nickname]".
 
-#### 7.2.4 Results flow
+#### 8.2.4 Results flow
 
 1. Manager opens Competition → "Results" tab → entry grid.
 2. Manager fills `position`, `is_winner`, `result_notes` per signup, and `had_barrage` + `barrage_notes` per Competition-Rade.
-3. Manager clicks "Save Draft" → `results_status = draft`.
-4. Manager clicks "Confirm Results" → `results_status = confirmed`.
-5. Manager clicks "Publish Results" → `results_status = published` → riders are notified (panel + SMS if enabled).
+3. Click "Save Draft" → `results_status = draft`.
+4. Click "Confirm Results" → `results_status = confirmed`.
+5. Click "Publish Results" → `results_status = published` → riders notified (panel + SMS if enabled).
 6. After publish: only Admin can reopen (`reopen` → back to `confirmed`).
 
-#### 7.2.5 Ban flow
+#### 8.2.5 Ban flow
 
-1. **Club ban** — Club account opens its own Ban page → adds a Rider or Horse → forward-looking only.
-2. **Admin/Manager ban** — Manager opens User detail → "Ban" → selects scope (global, competition, rade) → saves. Priority: Rider > Competition > Rade.
+- **Club ban:** Club opens its Ban page → adds a Rider or Horse → forward-looking only.
+- **Admin/Manager ban:** Manager opens User detail → "Ban" → selects scope (global, competition, rade) → saves. Priority: Rider > Competition > Rade.
 
-#### 7.2.6 Disable flow
+#### 8.2.6 Disable flow
 
-1. Manager/Admin opens User detail → "Disable" → selects `limited` or `full`.
-2. `limited`: user can log in but cannot create records. Banner displayed.
-3. `full`: user cannot log in. Login attempt shows a "banned" banner.
+- Manager/Admin opens User detail → "Disable" → selects `limited` or `full`.
+- `limited`: user can log in but cannot create records. Banner displayed.
+- `full`: user cannot log in. Login attempt shows "banned" banner.
 
-#### 7.2.7 Verification flow
+#### 8.2.7 Verification flow
 
 1. Rider signs up → `verification_status = pending`, `auto_verify_at = now + 48h`.
-2. Pending rider **can log in**, edit profile, sees a banner. Cannot add horses. Cannot sign up.
+2. Pending rider **can log in**, edit profile, sees banner. Cannot add horses. Cannot sign up.
 3. Manager verifies → `verification_status = verified`.
-4. Or Manager rejects → user + horses + uploads are hard-deleted; signups are anonymized; payment orders kept.
-5. If no action for 48h → system auto-verifies on next request touching that user.
+4. Manager rejects → user + horses + uploads hard-deleted; signups anonymized; payment orders kept.
+5. If no action within 48h → system auto-verifies on next request touching that user.
 
-#### 7.2.8 Competition cancellation
+#### 8.2.8 Competition cancellation
 
 1. Manager opens Competition → "Cancel" → confirms.
 2. All payment orders for that competition → `pending_refund`.
-3. Manager marks each as `refunded` after manual refund. Can toggle back.
+3. Manager marks each as `refunded` after manual refund. Toggle back supported.
 
 ---
 
-## 8. HTTP Envelope
+## 9. HTTP Envelope
 
 Every JSON response:
 
@@ -683,7 +733,8 @@ Every JSON response:
     "page": 1, "per_page": 50, "total": 1240, "filtered": 312,
     "culture": "fa-IR", "direction": "rtl", "timezone": "Asia/Tehran",
     "server_time_utc": "2025-01-01T10:00:00Z",
-    "impersonating": false
+    "impersonating": false,
+    "request_id": "..."
   },
   "errors": null,
   "flash": { "success": null, "error": null },
@@ -698,7 +749,7 @@ Error:
   "ok": false,
   "data": null,
   "errors": [{ "code": "AUTH_INVALID", "field": "password", "message": "..." }],
-  "meta": { },
+  "meta": { "request_id": "..." },
   "csrf": "token"
 }
 ```
@@ -707,9 +758,9 @@ HTTP statuses: 200, 201, 204, 302 (HTML), 400, 401, 403, 404, 409, 422, 423, 429
 
 ---
 
-## 9. Routes
+## 10. Routes
 
-### 9.1 Auth (guest)
+### 10.1 Auth (guest)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -723,7 +774,7 @@ HTTP statuses: 200, 201, 204, 302 (HTML), 400, 401, 403, 404, 409, 422, 423, 429
 | GET | `/captcha/{token}` | Captcha image |
 | POST | `/auth/logout` | Logout |
 
-### 9.2 Payment callbacks (public)
+### 10.2 Payment callbacks (public)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -731,7 +782,7 @@ HTTP statuses: 200, 201, 204, 302 (HTML), 400, 401, 403, 404, 409, 422, 423, 429
 | GET | `/payment/success` | Success page |
 | GET | `/payment/failed` | Failure page |
 
-### 9.3 Panel (auth)
+### 10.3 Panel (auth)
 
 **Dashboard** — `GET /panel`
 
@@ -781,7 +832,7 @@ HTTP statuses: 200, 201, 204, 302 (HTML), 400, 401, 403, 404, 409, 422, 423, 429
 
 ---
 
-## 10. Middleware Pipeline
+## 11. Middleware Pipeline
 
 Per request, in order:
 
@@ -797,7 +848,7 @@ Per request, in order:
 
 ---
 
-## 11. Authorization Matrix
+## 12. Authorization Matrix
 
 | Resource | Admin | Manager | Rider | Club |
 |---|---|---|---|---|
@@ -838,36 +889,26 @@ Per request, in order:
 
 ---
 
-## 12. Reports & KPIs
+## 13. Reports & KPIs
 
-### 12.1 Unified report engine
+### 13.1 Unified report engine
 
 One page: `/panel/reports`. Rich filters, rich columns, sidebar presets. AG Grid with column toggling, drag-and-drop reorder, sort, filter, pagination (default page 1). Grid state (columns, order, filters) persists in `localStorage` per user. Page number always resets to 1.
 
-**Report types** (single file, one class per report):
-- `signups`
-- `revenue`
-- `results`
-- `horses`
-- `riders`
-- `clubs`
-- `payments`
-- `bans`
+**Report types:** `signups`, `revenue`, `results`, `horses`, `riders`, `clubs`, `payments`, `bans`.
 
-Each report declares its own columns, filters, sort keys, and aggregations.
-
-### 12.2 Sidebar presets
+### 13.2 Sidebar presets
 
 The sidebar pre-fills filter state via query params (e.g. "Signups — this competition" → `report=signups&competition_id=X`).
 
-### 12.3 Dashboards & KPIs
+### 13.3 Dashboards & KPIs
 
 **Admin dashboard**
 - Total riders, horses, clubs, competitions
 - Revenue this month, this week, today
 - Pending verifications, confirmations, refunds
 - Active sessions
-- Signups over time (30d), revenue over time (30d), Rade popularity (bar)
+- Signups over time (30d), revenue over time (30d), Rade popularity
 - Recent changelog entries (last 20)
 - Quick actions
 
@@ -891,7 +932,7 @@ The sidebar pre-fills filter state via query params (e.g. "Signups — this comp
 - Active bans
 - Reports shortcut
 
-### 12.4 KPI definitions
+### 13.4 KPI definitions
 
 | KPI | Formula |
 |---|---|
@@ -907,9 +948,9 @@ The sidebar pre-fills filter state via query params (e.g. "Signups — this comp
 
 ---
 
-## 13. Integrations
+## 14. Integrations
 
-### 13.1 ZarinPal (production only)
+### 14.1 ZarinPal (production only)
 
 - **Request:** `POST https://payment.zarinpal.com/pg/v4/payment/request.json`
 - **Verify:** `POST https://payment.zarinpal.com/pg/v4/payment/verify.json`
@@ -918,7 +959,7 @@ The sidebar pre-fills filter state via query params (e.g. "Signups — this comp
 - **Idempotency:** lock per authority prevents double verification.
 - **Refunds:** manual only; panel action marks `pending_refund` / `refunded`.
 
-### 13.2 MelyPayamak (SMS)
+### 14.2 MelyPayamak (SMS)
 
 - **Disabled by default.**
 - Admin enables via `/panel/settings/sms`.
@@ -926,7 +967,7 @@ The sidebar pre-fills filter state via query params (e.g. "Signups — this comp
 - **Notifications:** signup, payment, confirmation, results, transfer, ban.
 - **Fallback:** if SMS is disabled, OTP endpoints return 403 `SMS_DISABLED`.
 
-### 13.3 Email
+### 14.3 Email
 
 - **Completely dropped.**
 - No PHPMailer, no SMTP settings, no email templates.
@@ -934,7 +975,7 @@ The sidebar pre-fills filter state via query params (e.g. "Signups — this comp
 
 ---
 
-## 14. Settings Registry
+## 15. Settings Registry
 
 ### general
 `app.name`, `app.tagline`, `app.env`, `app.debug`, `app.maintenance`, `app.maintenance_message`, `app.timezone_default` (`Asia/Tehran`), `app.default_culture` (`fa-IR`), `app.url_force_https`, `app.url_trusted_proxies`
@@ -982,15 +1023,17 @@ The sidebar pre-fills filter state via query params (e.g. "Signups — this comp
 `security.headers_csp`, `security.headers_hsts`, `security.cookie_same_site` (`lax`), `security.trusted_ips_admin`
 
 ### ui
-`ui.theme` (`light`), `ui.font_primary` (`Vazirmatn`), `ui.panel_path` (`panel`), `ui.default_avatar_admin_text` (`A`), `ui.default_avatar_manager_text` (`M`)
+`ui.font_primary` (`Vazirmatn`), `ui.panel_path` (`panel`), `ui.default_avatar_admin_text` (`A`), `ui.default_avatar_manager_text` (`M`)
+
+**Removed:** `ui.theme` (no dark mode).
 
 ---
 
-## 15. Seed Data Principles
+## 16. Seed Data Principles
 
 Seed data is **not included in this blueprint** as fixed records. Instead, the seeder must satisfy the following principles and volume.
 
-### 15.1 Volume (mandatory minimums)
+### 16.1 Volume (mandatory minimums)
 
 - **Clubs:** 4 active clubs
 - **Rades:** 6 rade definitions (آزاد، رده E، رده D، رده D1، رده تمرینی، رده مبتدی)
@@ -998,53 +1041,53 @@ Seed data is **not included in this blueprint** as fixed records. Instead, the s
 - **Riders:** 60 riders, split across experience levels (30 active, 20 occasional, 10 inactive)
 - **Horses:** 90 horses, distributed across riders (1–4 per rider), with valid microchips, valid races, valid colors, and correct ownership history
 - **Competitions:** 52 competitions, one per week over 12 months (2025-01 to 2025-12), each with 3–6 Rades
-- **Signups:** ~1,800 signups, distributed across competitions and Rades (5–20 per Rade)
+- **Signups:** ~1,800 signups distributed across competitions and Rades (5–20 per Rade)
 - **Payment orders:** ~1,600 paid, ~150 pending, ~50 refunded
 - **Results:** published for all competitions older than 30 days, draft for the last 4
 - **Transfers:** 8–12 horse transfers over the year
 - **Shares:** 15–20 active horse shares
 - **Bans:** 3 club bans, 5 admin bans
-- **Notifications:** generated as side effects (not explicitly seeded)
+- **Notifications:** generated as side effects
 - **Messages:** 6 broadcast messages
 
-### 15.2 Validity rules
+### 16.2 Validity rules
 
-- All dates must be in the past.
-- All Shamsi conversions must be accurate.
-- All phone numbers must be valid Iranian +98 numbers.
-- All national IDs must pass the Iranian check-digit algorithm.
-- All microchips must be 15-digit and unique.
-- All competition dates must be in the past or future as appropriate.
-- All payment amounts must be in IRT.
-- All results must be plausible (winner exists, positions unique per Rade).
-- All horses must belong to their owners.
+- All dates in the past.
+- All Shamsi conversions accurate.
+- All phone numbers valid Iranian +98.
+- All national IDs pass the Iranian check-digit algorithm.
+- All microchips 15-digit and unique.
+- All competition dates past or future as appropriate.
+- All payment amounts in IRT.
+- All results plausible (winner exists, positions unique per Rade).
+- All horses belong to their owners.
 
-### 15.3 Variety rules
+### 16.3 Variety rules
 
 - Iranian first names, last names, horse names, club names.
 - Iranian cities (Gorgan, Tehran, Mashhad, etc.).
 - Iranian clubs (باشگاه هیرکان، باشگاه شکوه طبیعت، باشگاه سزار).
-- Horse colors, races, and genders from the controlled vocabularies.
+- Horse colors, races, genders from controlled vocabularies.
 - Rades with realistic distributions (آزاد and رده E most popular).
 - Some competitions with barrage (`had_barrage=1`), most without.
 - Some riders with multiple horses, some with one.
-- Some horses with multiple signups in different Rades across different competitions.
+- Some horses with multiple signups across different Rades and competitions.
 - Some payment orders marked `refunded`.
 - Some clubs with bans.
 
-### 15.4 Seed structure
+### 16.4 Seed structure
 
-The seeder must be **idempotent**. Re-running it never duplicates records. All seeded rows carry `is_demo = 1` so they can be cleared in bulk.
+The seeder must be **idempotent**. Re-running never duplicates records. All seeded rows carry `is_demo = 1` so they can be cleared in bulk.
 
-### 15.5 Cleared by demo clear
+### 16.5 Demo clear
 
 "Clear demo" removes only rows where `is_demo = 1`, and their associated files under `uploads/demo/`.
 
 ---
 
-## 16. Printing & QR
+## 17. Printing & QR
 
-### 16.1 Printable entities
+### 17.1 Printable entities
 
 - Competition (single + list)
 - Horse (single + list)
@@ -1054,28 +1097,28 @@ The seeder must be **idempotent**. Re-running it never duplicates records. All s
 - Signup sheet (per competition)
 - Standings (per rider, per horse, per rider-horse pair)
 
-### 16.2 Print styles
+### 17.2 Print styles
 
 - A4, portrait.
-- Print header shows brand + entity title + Shamsi date.
+- Print header shows brand + entity title + Shamsi date + QR code.
 - Print footer shows page number + federation name.
-- Table layouts use `print.css`.
 - No JS needed at print time; server-rendered HTML.
 
-### 16.3 QR codes
+### 17.3 QR codes
 
 - QR encodes the current panel URL + query state.
 - Authed panel users scanning it see the same view.
-- Generated on-the-fly via `qr.js` (client-side) or `qr.php` (server-side, cached).
+- Generated on-the-fly via `qr.js` (client) or `/panel/qr?data=...` (server, cached).
 - Available on: competition paper, signup sheet, report page, entity page header.
 
 ---
 
-## 17. Notifications & Messaging
+## 18. Notifications & Messaging
 
-### 17.1 Panel notifications
+### 18.1 Panel notifications
 
 Events that generate notifications:
+
 - Signup created
 - Payment received
 - Payment failed
@@ -1094,15 +1137,32 @@ Events that generate notifications:
 - Results published
 - Admin broadcast
 
-### 17.2 Broadcast messages
+### 18.2 Broadcast messages
 
 - Managers/Admins can create broadcasts to: all riders, all riders of a competition, all riders of a competition-rade, selected users.
 - Delivered in-panel and (if SMS enabled) via SMS.
 - Read receipts tracked per recipient.
 
+### 18.3 SMS notification list (important events)
+
+The following notifications also go via SMS when `sms.enabled = true` and the corresponding `sms.notify_on_*` is true:
+
+- Signup created (rider)
+- Payment received (rider)
+- Payment failed (rider)
+- Signup confirmed (rider)
+- Signup rejected (rider)
+- Results published (rider)
+- Transfer request received (owner)
+- Transfer accepted (initiator)
+- Horse shared to you (recipient)
+- Ban applied (target)
+- Verification verified (rider)
+- Admin broadcast (recipients)
+
 ---
 
-## 18. File Uploads & Media
+## 19. File Uploads & Media
 
 - Single version per file.
 - UUID filenames.
@@ -1116,39 +1176,39 @@ Events that generate notifications:
 
 ---
 
-## 19. Caching & Logging
+## 20. Caching & Logging
 
-### 19.1 Cache
+### 20.1 Cache
 
 - File-based under `cache/`.
 - Namespaces: `settings`, `cultures`, `thumbs`, `reports`.
 - TTL per namespace (settings-configurable).
 - Admin "Clear Cache" clears all.
 
-### 19.2 Logs
+### 20.2 Logs
 
 - **App logs** (`logs.sqlite.app_logs`) — errors, warnings, slow queries (>200 ms).
-- **Audit logs** (`logs.sqlite.audit_logs`) — every write (create/update/delete) with actor, target, diff.
-- **Changelog** (`logs.sqlite.changelog`) — summary of Manager actions for Admin.
+- **Audit logs** (`logs.sqlite.audit_logs`) — every write with actor, target, diff.
+- **Changelog** (`logs.sqlite.changelog`) — Manager action summary for Admin.
 - **Login attempts** (`logs.sqlite.login_attempts`) — only failures and blocks.
 - **SMS logs** (`logs.sqlite.sms_logs`).
 - **OTP codes** (`logs.sqlite.otp_codes`) — hashed.
-- File-based JSON-lines rotation under `logs/app/YYYY-MM/YYYY-MM-DD.log` and `logs/audit/YYYY-MM/YYYY-MM-DD.log` for raw retention.
+- File-based JSON-lines rotation under `logs/app/YYYY-MM/YYYY-MM-DD.log` and `logs/audit/YYYY-MM/YYYY-MM-DD.log`.
 - Retention: app 30d, audit 180d, SMS 90d, login attempts 30d. Payment orders retained forever (main DB).
 
 ---
 
-## 20. Backup / Restore / Reset / Demo
+## 21. Backup / Restore / Reset / Demo
 
-### 20.1 Backup
+### 21.1 Backup
 
 - Admin UI trigger.
-- Zip: `database/app.sqlite`, `database/logs.sqlite`, `uploads/`, `storage/shares/` (optional).
+- Zip: `app.sqlite`, `logs.sqlite`, `uploads/`.
 - DB copy via `VACUUM INTO`.
 - Naming: `backup-YYYY-MM-DD_HHMMSS-{suffix}.zip`.
 - Storage: `backups/`.
 
-### 20.2 Restore
+### 21.2 Restore
 
 1. Enter maintenance.
 2. Pre-restore safety snapshot.
@@ -1160,7 +1220,7 @@ Events that generate notifications:
 8. Exit maintenance.
 9. Audit entry.
 
-### 20.3 Reset
+### 21.3 Reset
 
 - Wipes DB data (except settings + current admin).
 - Wipes uploads/.
@@ -1168,15 +1228,15 @@ Events that generate notifications:
 - Clears cache.
 - Audit entry.
 
-### 20.4 Demo
+### 21.4 Demo
 
-- Seeder is idempotent, rich (see §15).
+- Seeder idempotent, rich (see §16).
 - All rows tagged `is_demo = 1`.
 - "Clear demo" removes only demo rows + demo media.
 
 ---
 
-## 21. Installer
+## 22. Installer
 
 - Entry: `/install` (blocked if `settings` table populated).
 - Steps:
@@ -1192,13 +1252,13 @@ Events that generate notifications:
 
 ---
 
-## 22. Security
+## 23. Security
 
 - CSRF: per-session token, required on all state-changing requests.
 - XSS: output escaping by default (`e()` helper); HTMLPurifier for rich HTML.
 - SQLi: prepared statements; whitelist-driven report queries.
 - Sessions: HttpOnly, SameSite=Lax, Secure, rotation on privilege change, UA binding.
-- Rate limiting: login, signup, OTP, share unlock.
+- Rate limiting: login, signup, OTP.
 - Captcha: server-generated, signed, single-use.
 - Headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP (configurable), HSTS if HTTPS.
 - Uploads: MIME sniffing, UUID rename, no execution.
@@ -1209,7 +1269,355 @@ Events that generate notifications:
 
 ---
 
-## 23. Deployment & Portability
+## 24. Naming Conventions
+
+Single source of truth for naming. Any deviation is a bug.
+
+### 24.1 Database
+
+| Item | Convention | Example |
+|---|---|---|
+| Table names | `snake_case`, plural | `competition_rades` |
+| Column names | `snake_case` | `affiliation_club_id` |
+| Primary keys | `id` | `id` |
+| Foreign keys | `{referenced_table_singular}_id` | `rider_user_id`, `club_id` |
+| Boolean columns | `is_*` / `has_*` / `allow_*` | `is_confirmed`, `had_barrage` |
+| Timestamp columns | `*_at` | `created_at`, `verified_at` |
+| UUID columns | `uuid` | `uuid` |
+| Snapshot columns | `*_snapshot` | `payment_amount_irt_snapshot` |
+| Enum columns | `status`, `*_status`, `*_state`, `*_type` | `verification_status` |
+| JSON columns | `*_json` | `filter_state_json` |
+
+### 24.2 Settings keys
+
+- Dot notation: `{group}.{key}`.
+- All lowercase, snake_case within segments.
+- Examples: `auth.session_absolute_days`, `sms.otp_ttl_seconds`, `payment.zarinpal_merchant_id`.
+
+### 24.3 Routes
+
+- Lowercase.
+- Kebab-case for multi-word segments.
+- Plural for collections.
+- Nouns for resources; verbs only for actions.
+- Examples: `/panel/competitions`, `/panel/competitions/{id}/results/publish`, `/panel/payment-orders/reconciliation`.
+
+### 24.4 Classes and methods
+
+| Item | Convention | Example |
+|---|---|---|
+| Classes | PascalCase | `SignupService` |
+| Interfaces | PascalCase, `Interface` suffix | `ReportInterface` |
+| Methods | camelCase | `confirmSignup()` |
+| Constants | UPPER_SNAKE | `MAX_IMAGES` |
+| Namespaces | PSR-4-ish, matches folder | `App\Services` |
+| Controllers | `{Domain}Controller` | `HorseController` |
+| Services | `{Domain}Service` | `HorseService` |
+| Report classes | `{Name}Report` | `RevenueReport` |
+| Middleware | `{Name}Middleware` | `RoleMiddleware` |
+| Exceptions | `{Name}Exception` | `ValidationException` |
+
+### 24.5 Error codes
+
+- UPPER_SNAKE with domain prefix.
+- Domain prefixes: `AUTH_`, `USER_`, `SIGNUP_`, `PAYMENT_`, `SMS_`, `CAPTCHA_`, `VALIDATION_`, `RATE_`, `SERVER_`, `NOT_FOUND`, `FORBIDDEN`, `MAINTENANCE`.
+- Examples: `AUTH_INVALID`, `USER_DISABLED_FULL`, `PAYMENT_ALREADY_VERIFIED`, `SMS_DISABLED`.
+
+### 24.6 Config and env
+
+- No `.env`.
+- No `config/*.php`.
+- All settings in `settings` table.
+
+### 24.7 Files
+
+- One class per file unless merged (P23).
+- Merged files: `Models.php`, `Exceptions.php`, `Helpers.php`, `Middleware.php`, `Reports.php`.
+- Templates: `kebab-case.php`.
+- Schema files: `schema.sql`, `schema_logs.sql`.
+
+### 24.8 Assets
+
+- CSS: `kebab-case.css`.
+- JS: `kebab-case.js`.
+- Images: `kebab-case.{ext}`.
+- Fonts: `family-name/weight.woff2`.
+
+### 24.9 Audit action names
+
+- Dot notation: `{entity}.{action}`.
+- Examples: `user.create`, `user.update`, `user.disable`, `signup.confirm`, `payment.verify`, `horse.transfer.accept`.
+
+---
+
+## 25. Error Codes
+
+Every error code raised by the panel, with HTTP status, Persian and English messages, and the trigger.
+
+| Code | HTTP | Persian | English | Trigger |
+|---|---|---|---|---|
+| `AUTH_INVALID` | 401 | نام کاربری یا رمز عبور نادرست است | Invalid credentials | Login with wrong username/password |
+| `AUTH_RATE_LIMITED` | 429 | تعداد تلاش‌های شما بیش از حد مجاز است | Too many attempts | Login rate limit exceeded |
+| `AUTH_SESSION_EXPIRED` | 401 | نشست شما منقضی شده است | Session expired | Session missing or expired |
+| `AUTH_CSRF_INVALID` | 403 | درخواست نامعتبر است | Invalid request | CSRF token mismatch |
+| `AUTH_CAPTCHA_REQUIRED` | 422 | لطفا کد امنیتی را وارد کنید | Captcha required | Captcha missing |
+| `CAPTCHA_INVALID` | 422 | کد امنیتی نادرست است | Invalid captcha | Captcha wrong or expired |
+| `USER_DISABLED_FULL` | 403 | حساب شما مسدود شده است | Account banned | Login attempt on full-disabled user |
+| `USER_DISABLED_LIMITED` | 403 | حساب شما محدود شده است | Account restricted | Write attempt on limited-disabled user |
+| `USER_NOT_VERIFIED` | 403 | حساب شما هنوز تایید نشده است | Account not verified | Pending rider attempts restricted action |
+| `USER_NOT_FOUND` | 404 | کاربر یافت نشد | User not found | Lookup by ID or username failed |
+| `USER_PHONE_TAKEN` | 409 | این شماره قبلا ثبت شده است | Phone already registered | Signup with existing phone |
+| `USER_USERNAME_TAKEN` | 409 | این نام کاربری قبلا ثبت شده است | Username already registered | Signup with existing username |
+| `USER_NATIONAL_ID_INVALID` | 422 | کد ملی نامعتبر است | Invalid national ID | National ID check failed |
+| `USER_PHONE_INVALID` | 422 | شماره موبایل نامعتبر است | Invalid phone | Phone validation failed |
+| `USER_PASSWORD_WEAK` | 422 | رمز عبور ضعیف است | Weak password | Password policy failed |
+| `CLUB_NOT_FOUND` | 404 | باشگاه یافت نشد | Club not found | Lookup failed |
+| `CLUB_USER_TAKEN` | 409 | این حساب باشگاه قبلا استفاده شده است | Club user already linked | Duplicate club user |
+| `CLUB_BANNED` | 403 | این باشگاه شما را تحریم کرده است | Club has banned you | Signup with banning club |
+| `HORSE_NOT_FOUND` | 404 | اسب یافت نشد | Horse not found | Lookup failed |
+| `HORSE_NOT_OWNED` | 403 | این اسب متعلق به شما نیست | Horse not owned | Access attempt on foreign horse |
+| `HORSE_MICROCHIP_TAKEN` | 409 | این میکروچیپ قبلا ثبت شده است | Microchip already registered | Duplicate microchip |
+| `HORSE_TRANSFER_LOCKED` | 423 | انتقال این اسب در حال انجام است | Horse transfer in progress | Signup on locked horse |
+| `HORSE_NOT_ACTIVE` | 422 | این اسب غیرفعال است | Horse not active | Signup on inactive horse |
+| `RADE_NOT_FOUND` | 404 | رده یافت نشد | Rade not found | Lookup failed |
+| `RADE_SLUG_TAKEN` | 409 | این نامک قبلا استفاده شده است | Slug already taken | Duplicate rade slug |
+| `PAYMENT_NOT_FOUND` | 404 | پرداخت یافت نشد | Payment not found | Lookup failed |
+| `PAYMENT_SLUG_TAKEN` | 409 | این نامک قبلا استفاده شده است | Slug already taken | Duplicate payment slug |
+| `PAYMENT_ALREADY_VERIFIED` | 409 | این پرداخت قبلا تایید شده است | Payment already verified | Double verify attempt |
+| `PAYMENT_VERIFICATION_FAILED` | 422 | تایید پرداخت ناموفق بود | Payment verification failed | ZarinPal returned failure |
+| `PAYMENT_GATEWAY_DISABLED` | 503 | درگاه پرداخت غیرفعال است | Payment gateway disabled | Settings disabled |
+| `PAYMENT_MERCHANT_MISSING` | 500 | تنظیمات درگاه ناقص است | Gateway misconfigured | Missing merchant ID |
+| `COMPETITION_NOT_FOUND` | 404 | مسابقه یافت نشد | Competition not found | Lookup failed |
+| `COMPETITION_SLUG_TAKEN` | 409 | این نامک قبلا استفاده شده است | Slug already taken | Duplicate competition slug |
+| `COMPETITION_NOT_OPEN` | 422 | ثبت‌نام این مسابقه باز نیست | Registration closed | Signup attempt on closed |
+| `COMPETITION_REGISTRATION_PAUSED` | 422 | ثبت‌نام موقتا متوقف شده است | Registration paused | Signup attempt when paused |
+| `COMPETITION_RADE_NOT_FOUND` | 404 | رده در این مسابقه یافت نشد | Competition-Rade not found | Lookup failed |
+| `COMPETITION_RADE_FULL` | 422 | ظرفیت این رده تکمیل است | Rade full | Capacity reached |
+| `COMPETITION_RADE_CAPACITY_BELOW_COUNT` | 422 | ظرفیت نمی‌تواند کمتر از تعداد ثبت‌نام‌ها باشد | Capacity below signup count | Capacity edit blocked |
+| `SIGNUP_NOT_FOUND` | 404 | ثبت‌نام یافت نشد | Signup not found | Lookup failed |
+| `SIGNUP_DUPLICATE` | 409 | این ثبت‌نام قبلا انجام شده است | Duplicate signup | Unique index violation |
+| `SIGNUP_INVALID_STATE` | 422 | وضعیت ثبت‌نام اجازه این عملیات را نمی‌دهد | Invalid signup state | State transition blocked |
+| `SIGNUP_RIDER_BANNED` | 403 | شما از شرکت در این مسابقه منع شده‌اید | Rider banned | Ban check failed |
+| `SIGNUP_HORSE_BANNED` | 403 | این اسب از شرکت در این مسابقه منع شده است | Horse banned | Ban check failed |
+| `TRANSFER_NOT_FOUND` | 404 | درخواست انتقال یافت نشد | Transfer not found | Lookup failed |
+| `TRANSFER_CODE_INVALID` | 422 | کد انتقال نامعتبر است | Invalid transfer code | Wrong code |
+| `TRANSFER_EXPIRED` | 422 | کد انتقال منقضی شده است | Transfer code expired | TTL exceeded |
+| `SHARE_NOT_FOUND` | 404 | اشتراک یافت نشد | Share not found | Lookup failed |
+| `SHARE_CODE_INVALID` | 422 | کد اشتراک نامعتبر است | Invalid share code | Wrong code |
+| `SMS_DISABLED` | 403 | سرویس پیامک فعال نیست | SMS disabled | OTP request when disabled |
+| `SMS_SEND_FAILED` | 502 | ارسال پیامک ناموفق بود | SMS send failed | Provider error |
+| `OTP_INVALID` | 422 | کد وارد شده نادرست است | Invalid OTP | Wrong code |
+| `OTP_EXPIRED` | 422 | کد وارد شده منقضی شده است | OTP expired | TTL exceeded |
+| `OTP_MAX_ATTEMPTS` | 429 | تعداد تلاش‌ها بیش از حد مجاز است | OTP attempts exceeded | Max attempts hit |
+| `OTP_RATE_LIMITED` | 429 | تعداد درخواست‌ها بیش از حد مجاز است | OTP rate limited | Rate limit hit |
+| `VALIDATION_FAILED` | 422 | لطفا خطاهای فرم را برطرف کنید | Validation failed | Any field error |
+| `NOT_FOUND` | 404 | موردی یافت نشد | Not found | Generic 404 |
+| `FORBIDDEN` | 403 | شما به این بخش دسترسی ندارید | Forbidden | Role check failed |
+| `RATE_LIMITED` | 429 | تعداد درخواست‌های شما بیش از حد مجاز است | Rate limited | Generic rate limit |
+| `MAINTENANCE` | 423 | سیستم در حال تعمیر است | Under maintenance | Maintenance mode |
+| `SERVER_ERROR` | 500 | خطای سرور. لطفا بعدا تلاش کنید | Server error | Uncaught exception |
+| `SERVICE_UNAVAILABLE` | 503 | سرویس در دسترس نیست | Service unavailable | Dependency failure |
+| `BACKUP_FAILED` | 500 | پشتیبان‌گیری ناموفق بود | Backup failed | File/disk error |
+| `RESTORE_FAILED` | 500 | بازیابی ناموفق بود | Restore failed | File/disk error |
+| `IMPORT_FAILED` | 422 | ورود داده‌ها ناموفق بود | Import failed | CSV parse error |
+| `EXPORT_FAILED` | 500 | خروجی گرفتن ناموفق بود | Export failed | Disk/permission error |
+
+---
+
+## 26. Implementation Checklist
+
+Linear task list for the implementer. Each item links to the section(s) that define it.
+
+### 26.1 Bootstrap
+
+- [ ] `public/index.php` — single front controller (§5)
+- [ ] `app/Bootstrap/App.php` — Container, Router, Request, Response, Envelope, Database, LogDatabase (§2 P14–P15)
+- [ ] `vendor/autoload.php` — PSR-4-ish autoloader
+
+### 26.2 Schema
+
+- [ ] `database/schema.sql` — main DB DDL with per-column comments (§7.1)
+- [ ] `database/schema_logs.sql` — logs DB DDL (§7.2)
+- [ ] `database/upgrades/` — placeholder folder
+
+### 26.3 Auth
+
+- [ ] `AuthService` — password, OTP, sessions, rate limiting, captcha (§10.1, §23)
+- [ ] `AuthController` — login, signup, forgot, captcha, logout (§10.1)
+- [ ] Session table + middleware (§2 P08)
+- [ ] Captcha generation
+- [ ] OTP flow (only when SMS enabled)
+
+### 26.4 Culture & Settings
+
+- [ ] `cultures/fa-IR.json` — Iran-Tehran specific (§2 P25)
+- [ ] `cultures/en-US.json`
+- [ ] `CultureService` — resolve, translate, format
+- [ ] `SettingService` — registry, cache, invalidation
+- [ ] `CalendarService` — wrapped by `CultureService` for Jalali
+
+### 26.5 Middleware
+
+- [ ] `Middleware.php` — all 9 middleware classes (§11)
+- [ ] `Kernel.php` — pipeline orchestrator
+
+### 26.6 Users
+
+- [ ] `UserService` — CRUD, verify, reject, disable, impersonate (§4, §12)
+- [ ] `UserController` — unified users module (§10.3)
+- [ ] Verification flow (§8.2.7)
+- [ ] Disable states (§4.2)
+- [ ] Session revocation
+
+### 26.7 Clubs
+
+- [ ] `ClubService` — CRUD, bans (§4.3, §8.2.5)
+- [ ] `ClubController`
+- [ ] Club user account creation
+
+### 26.8 Horses
+
+- [ ] `HorseService` — CRUD, images, shares, transfers, import/export (§8.2.2, §8.2.3)
+- [ ] `HorseController`
+- [ ] CSV import/export with header-row mapping
+- [ ] Soft delete + sold-to-non-rider status
+
+### 26.9 Rades
+
+- [ ] `RadeService` — CRUD
+- [ ] `RadeController`
+
+### 26.10 Payments
+
+- [ ] `PaymentService` — templates CRUD, orders, ZarinPal gateway (§14.1)
+- [ ] `PaymentController`
+- [ ] ZarinPal request + verify + callback
+
+### 26.11 Competitions
+
+- [ ] `CompetitionService` — CRUD, Rades, pause/resume, clone (§8.2.1)
+- [ ] `CompetitionController`
+- [ ] Competition-Rade binding with Payment + capacity + auto-confirm
+
+### 26.12 Signups
+
+- [ ] `SignupService` — create, confirm, reject, position, withdraw (§8.2.1)
+- [ ] `SignupController`
+- [ ] Rider signup flow
+- [ ] Price snapshot on creation
+
+### 26.13 Results
+
+- [ ] `ResultService` — draft, confirm, publish, reopen (§8.2.4)
+- [ ] `ResultController`
+
+### 26.14 Reports
+
+- [ ] `ReportEngine` — registry, runner, query builder, share (§13)
+- [ ] `KpiService` — dashboards and summary tiles
+- [ ] `Reports.php` — all report classes
+- [ ] Signed download URLs
+- [ ] Grid state persistence
+
+### 26.15 Notifications & Messages
+
+- [ ] `NotificationService` — create, read, broadcast (§18)
+- [ ] `NotificationController`
+- [ ] Broadcast message delivery
+
+### 26.16 SMS & OTP
+
+- [ ] `SmsService` — MelyPayamak client (§14.2)
+- [ ] OTP generation, hashing, verification
+- [ ] Notification hooks
+
+### 26.17 Audit & Changelog
+
+- [ ] `LogService` — logger, audit, changelog (§20.2)
+- [ ] Audit viewer (Admin only)
+
+### 26.18 Backup / Restore / Reset / Demo
+
+- [ ] `BackupService` — backup, restore, reset (§21)
+- [ ] `DemoSeeder` — rich idempotent seeder (§16)
+
+### 26.19 Print & QR
+
+- [ ] Print templates (§17)
+- [ ] `PrintController`
+- [ ] QR generation (client + server)
+
+### 26.20 Frontend polish
+
+- [ ] Tailwind CSS build (committed)
+- [ ] Alpine.js components
+- [ ] AG Grid wrapper
+- [ ] SheetJS exports
+- [ ] Inline help tooltips
+
+### 26.21 Installer
+
+- [ ] `/install` wizard (§22)
+- [ ] Requirements check
+- [ ] Schema application
+- [ ] Reference seed
+- [ ] First Admin creation
+
+### 26.22 Documentation
+
+- [ ] `README.md` (root)
+- [ ] `documents/README.md`
+- [ ] Schema comments
+- [ ] Settings registry comments
+- [ ] Report class comments
+- [ ] Controller method comments
+- [ ] Service method comments
+
+---
+
+## 27. Risk Register & Prerequisites
+
+### 27.1 Client prerequisites (before deployment)
+
+- [ ] **Domain and subdomain DNS.** `panel.gorganhorse.ir` must resolve to the hosting server.
+- [ ] **HTTPS certificate.** Let's Encrypt or commercial.
+- [ ] **Hosting.** PHP 8.1+ (8.4 recommended), SQLite 3, ~5 GB storage, OPcache enabled.
+- [ ] **ZarinPal merchant ID** (production). Test/sandbox is not used at runtime.
+- [ ] **MelyPayamak credentials** (optional). Only needed if SMS is enabled.
+- [ ] **Backup storage.** External disk or cloud folder for periodic backup downloads.
+- [ ] **Administrator identity.** First Admin's username, phone, and password.
+- [ ] **Brand assets.** Logo, favicon, brand colors (optional; defaults apply).
+- [ ] **Approval to host outside WordPress.** Confirms panel/subdomain split.
+
+### 27.2 Operational risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| SQLite write contention at peak | Low | Medium | WAL mode; busy timeout; documented threshold (~50 concurrent writers) |
+| SMS provider outage | Medium | Low | SMS is optional; panel notifications still deliver |
+| ZarinPal outage | Low | High | Callbacks idempotent; manual verify button; audit trail |
+| Disk full | Low | High | Retention rules; admin alert on low disk; backups off-site |
+| Backup corruption | Low | High | Pre-restore safety snapshot; VACUUM INTO for consistency |
+| Credential leak (ZarinPal / SMS) | Low | High | Secrets stored in settings (DB); restrict panel access; rotate on suspicion |
+| Admin account loss | Low | High | Restore from backup; installer supports first-Admin reset via file-based recovery |
+| Session hijack | Low | Medium | UA binding; IP warning; force-logout; 90-day cap |
+| Race condition on capacity | Low | Medium | Capacity check inside transaction; unique index on signup |
+| Double payment callback | Low | Low | Lock per authority; idempotent verify |
+| Rider signup abuse | Medium | Low | Rate limiting on signup; verification queue |
+| CSV import malformed | Medium | Low | Header-row mapping; per-row error report; transaction rollback |
+| Browser compatibility | Low | Low | Modern browsers only; fallbacks documented |
+
+### 27.3 Out-of-scope risks (explicitly not addressed)
+
+- WordPress site security (separate system).
+- Email deliverability (dropped).
+- Multi-tenant scaling (single-tenant).
+- Mobile native apps.
+- Offline mode.
+
+---
+
+## 28. Deployment & Portability
 
 - Copy-paste the entire project folder. Nothing else needed.
 - Exclude `cache/*` and `database/*.sqlite` from transfer if starting fresh.
@@ -1217,3 +1625,15 @@ Events that generate notifications:
 - Domains change freely — no hostnames stored.
 - PHP 8.1+ (8.4 supported).
 - OPcache recommended.
+
+---
+
+## 29. Closing Notes
+
+- **This is the master blueprint.** Every architectural decision here is final.
+- **The Technical document** specifies how: stack, implementation rules, auth internals, validations.
+- **The User Usage document** specifies interactions: flows, KPIs per role, frontend build.
+- **The Project Proposal document** is the client-facing summary.
+- **No versioning. No phasing.** This is the production-ready final version.
+- **Documentation is mandatory** at every level (P01, P30).
+- **Seed data is rich** and represents a full year of agency operation (§16).
