@@ -87,3 +87,6 @@ yarn-error.log*
 *.bak
 *.orig
 *.log
+inliner.js
+run inliner.bat
+all.md
