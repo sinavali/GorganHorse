@@ -47,6 +47,7 @@ $record = $record ?? [];
     </div>
     <div class="toolbar" style="margin-block-start:16px">
         <a href="/panel/payment-orders/<?= (int) ($record['id'] ?? 0) ?>/print" class="btn">چاپ</a>
+        <a href="/panel/payment-orders/<?= (int) ($record['id'] ?? 0) ?>/pdf" class="btn">PDF</a>
         <?php if (($record['status'] ?? '') === 'paid'): ?>
             <button class="btn btn-danger" data-action="mark-refund" data-id="<?= (int) ($record['id'] ?? 0) ?>">بازپرداخت</button>
         <?php elseif (($record['status'] ?? '') === 'pending_refund'): ?>

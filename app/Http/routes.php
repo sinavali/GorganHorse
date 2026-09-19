@@ -186,6 +186,7 @@ return [
     ['GET',  '/panel/payment-orders/reconciliation', [PaymentController::class, 'reconciliation'], ['auth', 'role:admin,manager']],
     ['POST', '/panel/payment-orders/reconciliation', [PaymentController::class, 'reconciliation'], ['auth', 'role:admin,manager', 'csrf']],
     ['GET',  '/panel/payment-orders/{id}', [PaymentController::class, 'showOrder'], ['auth']],
+    ['GET',  '/panel/payment-orders/{id}/pdf', [PaymentController::class, 'pdf'], ['auth']],
     ['POST', '/panel/payment-orders/{id}/verify', [PaymentController::class, 'verifyOrder'], ['auth', 'role:admin,manager', 'csrf']],
     ['POST', '/panel/payment-orders/{id}/mark-pending-refund', [PaymentController::class, 'markPendingRefund'], ['auth', 'role:admin,manager', 'csrf']],
     ['POST', '/panel/payment-orders/{id}/mark-refunded', [PaymentController::class, 'markRefunded'], ['auth', 'role:admin,manager', 'csrf']],

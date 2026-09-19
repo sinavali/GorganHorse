@@ -168,6 +168,38 @@ final class PaymentController extends BaseController
     }
 
     /**
+     * Generate PDF invoice for a payment order.
+     *
+     * Route:   GET /panel/payment-orders/{id}/pdf
+     * Auth:    auth
+     * Returns: PDF file download
+     */
+    public function pdf(Request $request, MiddlewareContext $ctx): Response
+    {
+        $order = $this->c->get('payments')->getOrder((int) $request->attr('id'));
+        if ($order === null) {
+            return Response::html('Order not found', 404);
+        }
+        require_once BASE_PATH . '/app/Support/PdfInvoice.php';
+        $pdf = new \PdfInvoice();
+        $rider = [];
+        $competition = [];
+        if (!empty($order['rider_user_id'])) {
+            $riderRow = $this->c->get('db')->selectOne('SELECT first_name, last_name, phone FROM users WHERE id = :id', ['id' => (int) $order['rider_user_id']]);
+            if ($riderRow) $rider = $riderRow;
+        }
+        if (!empty($order['competition_id'])) {
+            $compRow = $this->c->get('db')->selectOne('SELECT title FROM competitions WHERE id = :id', ['id' => (int) $order['competition_id']]);
+            if ($compRow) $competition = $compRow;
+        }
+        $pdf->invoice($order, $rider, $competition);
+        $filename = 'invoice-' . ($order['id'] ?? '0') . '.pdf';
+        $filepath = BASE_PATH . '/cache/' . $filename;
+        $pdf->output('F', $filepath);
+        return Response::download($filepath, $filename);
+    }
+
+    /**
      * Manually verify an order.
      *
      * Route:   POST /panel/payment-orders/{id}/verify
