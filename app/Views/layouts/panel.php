@@ -44,12 +44,14 @@ if ($role === 'admin' || $role === 'manager') {
     $sidebar[] = $items('صورت‌حساب‌ها', '/panel/payment-orders', '/panel/payment-orders');
     $sidebar[] = $items('گزارش‌ها', '/panel/reports', '/panel/reports');
     $sidebar[] = $items('اعلان‌ها', '/panel/notifications', '/panel/notifications');
-    $sidebar[] = $items('پیام‌ها', '/panel/messages', '/panel/messages');
-    if ($role === 'admin') {
-        $sidebar[] = $items('تنظیمات', '/panel/settings', '/panel/settings');
-        $sidebar[] = $items('حسابرسی', '/panel/audit', '/panel/audit');
-        $sidebar[] = $items('پشتیبان‌گیری', '/panel/backups', '/panel/backups');
-    }
+        $sidebar[] = $items('پیام‌ها', '/panel/messages', '/panel/messages');
+        if ($role === 'admin') {
+            $sidebar[] = $items('تنظیمات', '/panel/settings', '/panel/settings');
+            $sidebar[] = $items('قالب‌های پیامک', '/panel/sms/templates', '/panel/sms/templates');
+            $sidebar[] = $items('لاگ پیامک', '/panel/sms/log', '/panel/sms/log');
+            $sidebar[] = $items('حسابرسی', '/panel/audit', '/panel/audit');
+            $sidebar[] = $items('پشتیبان‌گیری', '/panel/backups', '/panel/backups');
+        }
 } elseif ($role === 'rider') {
     $sidebar[] = $items('داشبورد', '/panel', '/panel');
     $sidebar[] = $items('اسبان من', '/panel/horses', '/panel/horses');

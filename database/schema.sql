@@ -654,3 +654,17 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     created_at TEXT NOT NULL,                               -- UTC creation timestamp
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- -----------------------------------------------------------------------------
+-- sms_templates
+-- Purpose: reusable SMS message templates with variable placeholders.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sms_templates (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,                              -- template name
+    body        TEXT NOT NULL,                              -- message body with {var} placeholders
+    variables   TEXT DEFAULT '[]',                          -- JSON array of variable names
+    is_active   INTEGER NOT NULL DEFAULT 1,                 -- 1 = active
+    created_at  TEXT NOT NULL,                              -- UTC creation timestamp
+    updated_at  TEXT NOT NULL                               -- UTC update timestamp
+);

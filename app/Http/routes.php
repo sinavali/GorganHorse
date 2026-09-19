@@ -20,6 +20,8 @@ declare(strict_types=1);
  */
 
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\Api\SmsController;
+use App\Http\Controllers\SmsTemplateController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClubController;
 use App\Http\Controllers\CompetitionController;
@@ -221,6 +223,18 @@ return [
     ['GET',  '/panel/settings/sms',   [SettingsController::class, 'sms'],      ['auth', 'role:admin']],
     ['POST', '/panel/settings/sms',   [SettingsController::class, 'sms'],      ['auth', 'role:admin', 'csrf']],
     ['POST', '/panel/settings/sms/test', [SettingsController::class, 'smsTest'], ['auth', 'role:admin', 'csrf']],
+
+    // ---------------- SMS Templates & Logs ----------------
+    ['GET',  '/panel/sms/templates/{id}', [SmsTemplateController::class, 'show'],      ['auth', 'role:admin']],
+    ['GET',  '/panel/sms/templates',      [SmsTemplateController::class, 'templates'], ['auth', 'role:admin']],
+    ['POST', '/panel/sms/templates',      [SmsTemplateController::class, 'templates'], ['auth', 'role:admin', 'csrf']],
+    ['POST', '/panel/sms/templates/{id}', [SmsTemplateController::class, 'update'],    ['auth', 'role:admin', 'csrf']],
+    ['POST', '/panel/sms/templates/{id}/toggle', [SmsTemplateController::class, 'toggle'], ['auth', 'role:admin', 'csrf']],
+    ['POST', '/panel/sms/templates/{id}/delete', [SmsTemplateController::class, 'delete'], ['auth', 'role:admin', 'csrf']],
+    ['GET',  '/panel/sms/log',            [SmsTemplateController::class, 'log'],         ['auth', 'role:admin']],
+
+    // ---------------- API SMS ----------------
+    ['POST', '/api/sms/send', [SmsController::class, 'send'], ['auth', 'role:admin,manager']],
     ['GET',  '/panel/settings/payment', [SettingsController::class, 'payment'], ['auth', 'role:admin']],
     ['POST', '/panel/settings/payment', [SettingsController::class, 'payment'], ['auth', 'role:admin', 'csrf']],
     ['POST', '/panel/cache/clear',    [SettingsController::class, 'clearCache'], ['auth', 'role:admin', 'csrf']],

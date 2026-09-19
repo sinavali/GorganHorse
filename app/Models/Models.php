@@ -495,6 +495,25 @@ final class Setting extends BaseModel
 }
 
 /**
+ * Class: SmsTemplate
+ * Table: sms_templates
+ * Purpose: reusable SMS message templates.
+ * Relations: none.
+ */
+final class SmsTemplate extends BaseModel
+{
+    public const TABLE = 'sms_templates';
+    public const CASTS = ['id' => 'int', 'is_active' => 'bool'];
+
+    /** @return array<string> Variable names from JSON column. */
+    public function variables(): array
+    {
+        $v = $this->get('variables', '[]');
+        return is_string($v) ? (json_decode($v, true) ?? []) : (is_array($v) ? $v : []);
+    }
+}
+
+/**
  * Class: Culture
  * Table: cultures
  * Purpose: culture list row.
