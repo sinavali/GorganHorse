@@ -18,7 +18,17 @@ $record = $record ?? [];
 $rades = $rades ?? [];
 $all_rades = $all_rades ?? [];
 $payments = $payments ?? [];
+$end_registration_at = $record['end_registration_at'] ?? null;
+$now_utc = now_utc();
+$registration_closed = $end_registration_at !== null && $end_registration_at < $now_utc;
+$registration_open = $end_registration_at !== null && $end_registration_at >= $now_utc;
 ?>
+<?php if ($registration_open || $registration_closed): ?>
+<div x-data="countdownTimer('<?= e($end_registration_at ?? '') ?>')" class="banner" :class="closed ? 'banner-alert' : 'banner-success'" style="margin-block-end:16px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+    <span x-text="label">ثبت‌نام</span>
+    <span style="font-variant-numeric:tabular-nums;font-weight:700;font-size:18px;direction:ltr" x-text="display">--</span>
+</div>
+<?php endif; ?>
 <h1 style="margin:0 0 16px">مسابقه: <?= e($record['title'] ?? '') ?></h1>
 
 <div class="tabs" style="display:flex;gap:4px;border-block-end:2px solid var(--line);margin-block-end:16px;flex-wrap:wrap">

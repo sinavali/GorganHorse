@@ -102,4 +102,47 @@
 
     // Expose a small global API for inline Alpine components.
     window.Panel = { api, toast, confirmTyped, confirmAction, normalizeDigits, csrf: CSRF };
+
+    // Countdown timer Alpine component (registration deadline).
+    if (typeof Alpine !== 'undefined') {
+        Alpine.data('countdownTimer', function (isoDate) {
+            return {
+                closed: false,
+                display: '--',
+                label: 'تا ثبت‌نام',
+                timer: null,
+                init: function () {
+                    var self = this;
+                    if (!isoDate) { this.display = 'بدون مهلت'; return; }
+                    var target = new Date(isoDate).getTime();
+                    if (isNaN(target)) { this.display = 'تاریخ نامعتبر'; return; }
+                    var update = function () {
+                        var diff = target - Date.now();
+                        if (diff <= 0) {
+                            self.closed = true;
+                            self.display = 'ثبت‌نام بسته شده';
+                            self.label = 'ثبت‌نام';
+                            clearInterval(self.timer);
+                            return;
+                        }
+                        var d = Math.floor(diff / 86400000);
+                        var h = Math.floor((diff % 86400000) / 3600000);
+                        var m = Math.floor((diff % 3600000) / 60000);
+                        var s = Math.floor((diff % 60000) / 1000);
+                        var parts = [];
+                        if (d > 0) parts.push(d + ' روز');
+                        parts.push(String(h).padStart(2, '0') + ' ساعت');
+                        parts.push(String(m).padStart(2, '0') + ' دقیقه');
+                        parts.push(String(s).padStart(2, '0') + ' ثانیه');
+                        self.display = parts.join(' ');
+                    };
+                    update();
+                    self.timer = setInterval(update, 1000);
+                },
+                destroy: function () {
+                    if (this.timer) clearInterval(this.timer);
+                }
+            };
+        });
+    }
 })();
