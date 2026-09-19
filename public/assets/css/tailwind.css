@@ -1,0 +1,9 @@
+/* =============================================================================
+ * File: public/assets/css/tailwind.css
+ *
+ * Purpose: Placeholder for the compiled Tailwind output. Tailwind is built
+ *          during development and the output is committed here (Technical §2.2).
+ *          The panel relies on panel.css for its component layer; this file can
+ *          be replaced by a real `npx tailwindcss -o public/assets/css/tailwind.css`
+ *          build without any application changes.
+ * ========================================================================== */

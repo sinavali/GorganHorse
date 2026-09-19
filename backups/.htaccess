@@ -1,0 +1,2 @@
+# Deny direct access to backup archives.
+Require all denied

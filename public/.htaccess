@@ -1,0 +1,23 @@
+# =============================================================================
+# File: public/.htaccess
+# Purpose: Route all requests to the single front controller (index.php) and
+#          serve static assets directly. Apache-only; see docs/nginx.conf.sample.
+# =============================================================================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Serve existing files/directories directly.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Everything else goes to the front controller.
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+Options -Indexes

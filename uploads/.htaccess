@@ -1,0 +1,10 @@
+# =============================================================================
+# File: uploads/.htaccess
+# Purpose: Disable PHP execution in the uploads directory (Blueprint §19, §23).
+# =============================================================================
+php_flag engine off
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|phps|pl|py|cgi|asp|aspx|sh)$">
+    Require all denied
+</FilesMatch>
+Options -Indexes -ExecCGI
+AddType text/plain .php

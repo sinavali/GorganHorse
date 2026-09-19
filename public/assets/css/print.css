@@ -1,0 +1,34 @@
+/* =============================================================================
+ * File: public/assets/css/print.css
+ * Purpose: A4 portrait print styles (Blueprint §17.2, Technical §27.1).
+ * ========================================================================== */
+
+@page { size: A4 portrait; margin: 12mm; }
+
+body.print-body {
+    font-family: "Vazirmatn", Tahoma, sans-serif;
+    color: #000;
+    background: #fff;
+    margin: 0;
+    font-size: 12pt;
+}
+
+.print-header {
+    display: flex; justify-content: space-between; align-items: center;
+    border-block-end: 2px solid #000; padding-block-end: 6px; margin-block-end: 12px;
+}
+.print-brand { font-weight: 700; }
+.print-title { font-size: 14pt; font-weight: 700; }
+.print-date { font-size: 10pt; color: #333; }
+
+.print-content table { width: 100%; border-collapse: collapse; }
+.print-content th, .print-content td { border: 1px solid #999; padding: 4px 6px; text-align: start; font-size: 10pt; }
+
+.print-footer {
+    border-block-start: 1px solid #999; margin-block-start: 12px; padding-block-start: 4px;
+    font-size: 9pt; color: #333; text-align: center;
+}
+
+@media print {
+    .no-print { display: none !important; }
+}

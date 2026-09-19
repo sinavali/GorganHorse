@@ -1,0 +1,11 @@
+# =============================================================================
+# File: .htaccess (project root)
+# Purpose: Redirect all traffic into the public/ web root and deny direct
+#          access to application, database, vendor, and cache files.
+# =============================================================================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+Options -Indexes

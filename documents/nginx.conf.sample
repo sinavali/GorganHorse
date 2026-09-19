@@ -1,0 +1,50 @@
+# Gorgan Horse Federation Panel — Nginx sample configuration.
+# Copy to your Nginx sites-available directory and adjust paths/domains.
+
+server {
+    listen 80;
+    server_name panel.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name panel.example.com;
+
+    root /var/www/gorgan-panel/public;
+    index index.php;
+
+    ssl_certificate     /etc/letsencrypt/live/panel.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/panel.example.com/privkey.pem;
+
+    client_max_body_size 30m;
+
+    # Deny direct access to application-sensitive folders.
+    location ~ ^/(app|database|vendor|cache|logs|backups|cultures)/ {
+        deny all;
+        return 404;
+    }
+
+    # Serve static assets directly.
+    location /assets/ {
+        try_files $uri =404;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_read_timeout 60s;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}

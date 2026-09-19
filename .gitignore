@@ -1,0 +1,89 @@
+# =============================================================================
+# File: .gitignore
+# Purpose: Exclude runtime state, databases, uploads, caches, logs, backups,
+#          OS/IDE cruft, and secrets from version control. Only source code,
+#          schemas, seed definitions, views, docs, and vendored assets are
+#          tracked (see the "!" entries at the bottom of each block).
+# =============================================================================
+
+# --- SQLite databases (live data + password hashes + sessions) -------------
+/database/*.sqlite
+/database/*.sqlite-wal
+/database/*.sqlite-shm
+/database/*.sqlite-journal
+
+# --- Uploads (user-generated content) --------------------------------------
+/uploads/*
+!/uploads/.htaccess
+!/uploads/.gitkeep
+
+# --- File cache ------------------------------------------------------------
+/cache/*
+!/cache/.htaccess
+!/cache/.gitkeep
+
+# --- Logs (raw JSON-lines) -------------------------------------------------
+/logs/*
+!/logs/.htaccess
+!/logs/.gitkeep
+
+# --- Backups (zip archives of DB + uploads) --------------------------------
+/backups/*
+!/backups/.htaccess
+!/backups/.gitkeep
+
+# --- Generated exports -----------------------------------------------------
+/cache/exports/*
+!/cache/exports/.gitkeep
+
+# --- Captcha transients ----------------------------------------------------
+/cache/captcha/*
+/cache/captcha-guest/*
+!/cache/captcha/.gitkeep
+!/cache/captcha-guest/.gitkeep
+
+# --- Backup/restore temp dirs ----------------------------------------------
+/cache/backup-tmp-*
+/cache/restore-tmp-*
+
+# --- OS cruft --------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- IDE / editor ----------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# --- Local environment overrides (never committed; settings live in DB) ----
+.env
+.env.*
+!.env.example
+
+# --- Node (only if Tailwind is rebuilt locally; not needed at runtime) -----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- PHPUnit / coverage (if ever added) ------------------------------------
+.phpunit.result.cache
+/coverage/
+
+# --- Temporary / misc ------------------------------------------------------
+*.tmp
+*.bak
+*.orig
+*.log

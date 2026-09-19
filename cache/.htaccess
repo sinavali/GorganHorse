@@ -1,0 +1,2 @@
+# Deny direct access to cached files.
+Require all denied
