@@ -2,26 +2,22 @@
 set -e
 export OPENHANDS_PROJECT_DIR="$PWD"
 
-if [ -d "core" ]; then
-  (cd core && make setup 2>/dev/null || true)
+if [ ! -f "public/index.php" ]; then
+  echo "[setup] WARNING: public/index.php not found. Expected PHP project root."
 fi
 
-if [ -d "frontends" ] && command -v pnpm >/dev/null; then
-  (cd frontends && pnpm install --frozen-lockfile 2>/dev/null || true)
+if [ ! -f "docs/Features.md" ] && [ ! -f "documents/Features.md" ]; then
+  echo "[setup] WARNING: Features.md not found in docs/ or documents/"
 fi
 
-if [ -d "mobile" ] && command -v flutter >/dev/null; then
-  (cd mobile && flutter pub get 2>/dev/null || true)
+if [ ! -f "AGENTS.md" ]; then
+  echo "[setup] WARNING: AGENTS.md not found."
+fi
+
+if [ ! -d "vendor" ]; then
+  echo "[setup] NOTE: vendor/ not found. Run composer install if needed."
 fi
 
 chmod +x .openhands/hooks/*.sh 2>/dev/null || true
-
-if [ ! -f "docs/Features.md" ]; then
-  echo "[setup] WARNING: docs/Features.md not found."
-fi
-
-if [ ! -f "docs/INDEX.md" ]; then
-  echo "[setup] WARNING: docs/INDEX.md not found."
-fi
 
 echo "[setup] Setup complete."

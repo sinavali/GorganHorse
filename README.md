@@ -112,6 +112,22 @@ No other external services are required. Email is dropped entirely.
 
 ---
 
+## For AI Agents (OpenHands, Copilot, CrewPilot)
+
+**Start here.** `AGENTS.md` is the single source of truth for AI agents working in this repository. It contains:
+
+- Tech stack and architecture principles (10 mandatory P-principles)
+- Roles and permissions matrix
+- Key file locations for every layer
+- Authentication and security rules
+- Development workflow (adding routes, reports, DB changes)
+- Code standards and documentation requirements
+- Integration points (ZarinPal, MelyPayamak)
+- Testing approach
+- Iran-specific conventions (Jalali calendar, Toman currency, Persian digits)
+
+---
+
 ## Getting started
 
 ### For the client / stakeholders
