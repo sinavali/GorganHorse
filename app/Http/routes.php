@@ -33,6 +33,7 @@ use App\Http\Controllers\PrintController;
 use App\Http\Controllers\RadeController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResultController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SignupController;
 use App\Http\Controllers\UserController;
@@ -217,7 +218,8 @@ return [
     ['GET',  '/panel/messages/{id}',  [NotificationController::class, 'showMessage'], ['auth']],
     ['POST', '/panel/messages/{id}/read', [NotificationController::class, 'readMessage'], ['auth', 'csrf']],
 
-    // ---------------- Settings ----------------
+    // ---------------- Search ----------------
+    ['GET', '/api/search', [SearchController::class, 'search'], ['auth']],
     ['GET',  '/panel/settings',       [SettingsController::class, 'index'],    ['auth', 'role:admin']],
     ['POST', '/panel/settings',       [SettingsController::class, 'index'],    ['auth', 'role:admin', 'csrf']],
     ['GET',  '/panel/settings/sms',   [SettingsController::class, 'sms'],      ['auth', 'role:admin']],
