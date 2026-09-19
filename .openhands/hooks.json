@@ -1,0 +1,39 @@
+{
+  "pre_tool_use": [
+    {
+      "matcher": "terminal",
+      "hooks": [
+        {
+          "command": ".openhands/hooks/block_dangerous.sh",
+          "timeout": 10
+        }
+      ]
+    }
+  ],
+  "stop": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "command": ".openhands/hooks/quality_gate.sh",
+          "timeout": 300
+        },
+        {
+          "command": ".openhands/hooks/pr_test_gate.sh",
+          "timeout": 120
+        }
+      ]
+    }
+  ],
+  "session_start": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "command": ".openhands/hooks/heartbeat.sh",
+          "timeout": 60
+        }
+      ]
+    }
+  ]
+}

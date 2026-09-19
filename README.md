@@ -18,15 +18,15 @@ The panel is **authenticated-only** for all users. The only public endpoints are
 
 ## Documentation
 
-All project documentation lives in `/documents/`. Read in this order depending on your role.
+All project documentation lives in `/docs/`. Read in this order depending on your role.
 
 | Document | Audience | Purpose |
 |---|---|---|
-| [`documents/README.md`](./documents/README.md) | Everyone | Documents index and reading guide. |
-| [`documents/Project Proposal — Gorgan Horse Federation Panel.md`](./documents/Project%20Proposal%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Client, stakeholders | Executive summary, deliverables, KPIs, success metrics. |
-| [`documents/Backend Blueprint — Gorgan Horse Federation Panel.md`](./documents/Backend%20Blueprint%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Architects, reviewers | Master blueprint: principles, scope, schema, flows, routes, KPIs, integrations, glossary, error codes, implementation checklist, risk register. |
-| [`documents/Technical — Gorgan Horse Federation Panel.md`](./documents/Technical%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Implementers, maintainers | Stack, implementation rules, auth internals, validations, deployment. |
-| [`documents/User Usage — Gorgan Horse Federation Panel.md`](./documents/User%20Usage%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Frontend developers, UX | Every screen, flow, KPI, empty state, error message, print view. |
+| [`docs/README.md`](./docs/README.md) | Everyone | Documents index and reading guide. |
+| [`docs/Project Proposal — Gorgan Horse Federation Panel.md`](./docs/Project%20Proposal%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Client, stakeholders | Executive summary, deliverables, KPIs, success metrics. |
+| [`docs/Backend Blueprint — Gorgan Horse Federation Panel.md`](./docs/Backend%20Blueprint%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Architects, reviewers | Master blueprint: principles, scope, schema, flows, routes, KPIs, integrations, glossary, error codes, implementation checklist, risk register. |
+| [`docs/Technical — Gorgan Horse Federation Panel.md`](./docs/Technical%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Implementers, maintainers | Stack, implementation rules, auth internals, validations, deployment. |
+| [`docs/User Usage — Gorgan Horse Federation Panel.md`](./docs/User%20Usage%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Frontend developers, UX | Every screen, flow, KPI, empty state, error message, print view. |
 
 **Note:** The Blueprint includes merged sections for Glossary, Naming Conventions, Error Codes, Implementation Checklist, and Risk Register. Standalone documents for those are not needed.
 
@@ -56,7 +56,7 @@ The User Usage document is your reference. Validate against real users (Admin, M
 ```
 /
 ├── README.md                    ← you are here
-├── documents/                   ← all specification docs
+├── docs/                   ← all specification docs
 ├── public/                      ← web root (single entry point)
 ├── app/                         ← application code
 ├── database/                    ← schemas, seeds, runtime DBs

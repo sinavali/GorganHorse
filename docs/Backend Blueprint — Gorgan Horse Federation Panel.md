@@ -365,7 +365,7 @@ Merged structure per P23. Target ~40 PHP files in `app/`.
 /
 ├── .htaccess                          # → /public
 ├── README.md                          # project index
-├── documents/
+├── docs/
 │   ├── README.md                      # documents index
 │   ├── Backend Blueprint — Gorgan Horse Federation Panel.md
 │   ├── Technical — Gorgan Horse Federation Panel.md
@@ -1566,7 +1566,7 @@ Linear task list for the implementer. Each item links to the section(s) that def
 ### 26.22 Documentation
 
 - [ ] `README.md` (root)
-- [ ] `documents/README.md`
+- [ ] `docs/README.md`
 - [ ] Schema comments
 - [ ] Settings registry comments
 - [ ] Report class comments
