@@ -1,0 +1,14 @@
+# OpenHands configuration
+# Place this file in the project root or at ~/.openhands/config.toml
+
+[llm]
+model = "deepseek-v4-pro"
+base_url = "http://127.0.0.1:9655/v1"
+api_key = "any-string"
+
+[condenser]
+model = "deepseek-chat"
+base_url = "http://127.0.0.1:9655/v1"
+api_key = "any-string"
+max_size = 40
+keep_first = 6

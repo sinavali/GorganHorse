@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${WORKSPACE}"],
+      "env": {}
+    },
+    "engram": {
+      "command": "npx",
+      "args": ["-y", "mcp-engram"],
+      "env": {
+        "ENGRAM_STORAGE": "${WORKSPACE}/.openhands/engram"
+      }
+    }
+  }
+}
