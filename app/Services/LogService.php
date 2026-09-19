@@ -203,6 +203,26 @@ final class LogService
     }
 
     /**
+     * Read outbound SMS logs (last N, optional status filter).
+     *
+     * @param int    $limit  Max rows.
+     * @param string|null $status Filter: sent|failed|skipped|null=all.
+     * @return array<int,array>
+     */
+    public function smsLogList(int $limit = 50, ?string $status = null): array
+    {
+        $sql = 'SELECT * FROM sms_logs WHERE 1=1';
+        $params = [];
+        if ($status !== null) {
+            $sql .= ' AND status = :s';
+            $params['s'] = $status;
+        }
+        $sql .= ' ORDER BY id DESC LIMIT :l';
+        $rows = $this->db->select($sql, array_merge($params, ['l' => $limit]));
+        return is_array($rows) ? $rows : [];
+    }
+
+    /**
      * Opportunistically purge expired log rows (1-in-N per request).
      *
      * Cleans the logs DB (app/audit/sms/login/otp) plus the main DB's
