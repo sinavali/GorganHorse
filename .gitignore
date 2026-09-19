@@ -59,6 +59,7 @@ Desktop.ini
 # --- IDE / editor ----------------------------------------------------------
 .vscode/
 .idea/
+.freebuff
 *.swp
 *.swo
 *~
