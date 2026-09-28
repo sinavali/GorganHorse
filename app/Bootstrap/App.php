@@ -490,14 +490,16 @@ final class Response
      */
     public function withCookie(string $name, string $value, int $expires, string $path = '/', bool $httpOnly = true, ?string $sameSite = 'Lax'): self
     {
-        $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-        setcookie($name, $value, [
-            'expires' => $expires,
-            'path' => $path,
-            'secure' => $secure,
-            'httponly' => $httpOnly,
-            'samesite' => $sameSite ?? 'Lax',
-        ]);
+        if (!headers_sent()) {
+            $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+            setcookie($name, $value, [
+                'expires' => $expires,
+                'path' => $path,
+                'secure' => $secure,
+                'httponly' => $httpOnly,
+                'samesite' => $sameSite ?? 'Lax',
+            ]);
+        }
         return $this;
     }
 
