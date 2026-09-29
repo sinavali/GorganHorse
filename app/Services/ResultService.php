@@ -118,7 +118,7 @@ final class ResultService
         }
         $now = now_utc();
         $saved = 0;
-        $this->db->transaction(function () use ($competitionId, $payload, $now, &$saved): void {
+        $this->db->transaction(function () use ($competitionId, $payload, $now, $actor, &$saved): void {
             foreach (($payload['rades'] ?? []) as $rade) {
                 $compRadeId = (int) ($rade['comp_rade_id'] ?? 0);
                 if ($compRadeId <= 0) {

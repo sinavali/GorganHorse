@@ -60,7 +60,7 @@ spl_autoload_register(static function (string $class): void {
         $relative = substr($class, $len);
         $file = $baseDir . '/' . str_replace('\\', '/', $relative) . '.php';
         if (is_file($file)) {
-            require $file;
+            require_once $file;
             return;
         }
         // Matched a prefix but the PSR-4 file is absent; fall through to the
@@ -80,7 +80,7 @@ spl_autoload_register(static function (string $class): void {
 
     foreach ($merged as $prefix => $file) {
         if (strncmp($prefix, $class, strlen($prefix)) === 0 && is_file($file)) {
-            require $file;
+            require_once $file;
             return;
         }
     }
