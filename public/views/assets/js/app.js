@@ -397,12 +397,6 @@ function openPalette(){
     });
     return out;
   }
-  function routePathFor(key){
-  var m={paymentOrders:'/payment-orders',horseShares:'/horse-shares',smsLog:'/sms-log',
-    sms:'/sms',mySignups:'/my-signups',riderCompetitions:'/rider/competitions',
-    calendar:'/calendar',ranking:'/ranking',lookups:'/lookups'};
-    return m[key]||('/'+key.replace(/[A-Z]/g,function(c){return '-'+c.toLowerCase();}));
-  }
   function entities(term){
     if(!App.user){return Promise.resolve([]);}
     var q={per_page:6};
@@ -641,7 +635,7 @@ function renderFailure(view,err){
 function setAutoCrumbs(key,id){
   var p=App.pages[key];
   if(!p){App.crumbs=[];renderCrumbs();return;}
-  var pathOf=pathFor(key);
+  var pathOf=routePathFor(key);
   App.crumbs=[{label:'داشبورد',path:'/dashboard'}];
   if(pathOf!=='/dashboard'){
     App.crumbs.push({label:p.title,path:pathOf});
@@ -651,13 +645,18 @@ function setAutoCrumbs(key,id){
   }
   renderCrumbs();
 }
-function pathFor(key){
+/* Page key -> real URL. Lives at module scope on purpose: the sidebar, the
+   command palette and the breadcrumbs all need it, and a copy nested inside
+   openPalette() left App.go(routePathFor(...)) as a ReferenceError there.
+   Keys not listed fall back to kebab-case, which is what most pages use. */
+function routePathFor(key){
   var m={paymentOrders:'/payment-orders',horseShares:'/horse-shares',smsLog:'/sms-log',
     sms:'/sms',mySignups:'/my-signups',riderCompetitions:'/rider/competitions',
     riderSignup:'/rider/competitions',lookups:'/lookups',calendar:'/calendar',ranking:'/ranking'};
   return m[key]||('/'+key.replace(/[A-Z]/g,function(c){return '-'+c.toLowerCase();}));
 }
-App.pathFor=pathFor;
+/* Kept under its old name for anything already using the public helper. */
+App.pathFor=routePathFor;
 
 /* ---------------- payment result landing ---------------- */
 function renderPaymentResult(){

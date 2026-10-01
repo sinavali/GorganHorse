@@ -74,6 +74,29 @@ check(
   /App\.go\(routePathFor\(b\.dataset\.nav\)\)/.test(app),
   "app.js: sidebar clicks must use routePathFor(); '/'+key produced /paymentOrders, /smsLog and /mySignups, which 404'd"
 );
+
+/* 2b. routePathFor() must be declared exactly once, at module scope.
+   It used to be a local function nested inside openPalette(), so every call
+   site outside that function — including the sidebar — raised
+   "routePathFor is not defined" the moment a user clicked a nav entry. A
+   nested copy is invisible to sibling code even though `node --check` passes. */
+var rpDecls = app.match(/^[ \t]*function routePathFor\s*\(/gm) || [];
+check(
+  rpDecls.length === 1,
+  'app.js: routePathFor() must be declared exactly once (found ' + rpDecls.length + ') — duplicate copies drift apart'
+);
+check(
+  /^function routePathFor\s*\(/m.test(app),
+  'app.js: routePathFor() must be declared at module scope (column 0); an indented copy is local to its enclosing function and is undefined to the sidebar'
+);
+check(
+  !/\n[ \t]+function routePathFor\s*\(/.test(app),
+  'app.js: an indented routePathFor() declaration exists — it is trapped inside its enclosing function and the sidebar cannot reach it'
+);
+check(
+  /App\.pathFor\s*=\s*routePathFor/.test(app),
+  'app.js: App.pathFor must stay bound to routePathFor() so existing callers keep working'
+);
 check(
   app.indexOf("App.go('/'+b.dataset.nav)") === -1,
   "app.js: the '/'+key navigation is still present and will 404 for camelCase page keys"
