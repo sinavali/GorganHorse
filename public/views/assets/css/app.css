@@ -420,15 +420,37 @@ th.sorted-asc .srt,th.sorted-desc .srt{color:var(--brand);opacity:1}
 
 /* ---- responsive ---- */
 @media(max-width:900px){
-  #topIn{padding:0 12px}
-  .crumbs{padding:0 12px 8px}
+  #topIn{padding:0 12px;gap:8px}
+  .crumbs{padding:0 12px 8px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tabs{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
   .fbar .row{gap:6px}
   #cmdk .i11{display:none}
+}
+@media(max-width:720px){
+  /* .rl/.kpi are flex rows with no wrap, so a long title pushed the paired
+     button past the viewport edge. */
+  .rl{flex-wrap:wrap}
+  .kpi{flex-wrap:wrap}
 }
 @media(max-width:640px){
   .cal-grid{grid-template-columns:1fr!important}
   .pal{padding:4vh 8px}
   .tb{font-size:12px}
+  /* A two-column dl squeezes the value column on a phone; stack it. */
+  .grid-dl{grid-template-columns:1fr;gap:1px 0}
+  .grid-dl dd{margin-bottom:9px}
+  .tw{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  .pager{gap:8px}
+  #toasts{inset-inline:12px;align-items:stretch}
+  .toast{min-width:0;max-width:100%;width:100%}
+}
+@media(max-width:420px){
+  /* The filter bar's search box and selects carry inline min-widths, so they
+     need !important to be allowed to shrink on 320-420px screens. */
+  .fbar .spk{min-width:0!important;flex:1 1 100%!important}
+  #topIn{height:auto;min-height:56px;padding-block:8px}
+  .mw{padding:8px}
+  .mdl{border-radius:14px}
 }
 
 /* ============================================================================

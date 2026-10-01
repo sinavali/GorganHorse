@@ -29,6 +29,9 @@ function makeNode(tag, attrs) {
     tag: String(tag || 'div').toLowerCase(),
     attrs: attrs || {},
     children: [],
+    /* A real DOM mirrors data-* attributes into dataset. Without this,
+       initPicks()'s `host.dataset.spk` lookup returned undefined, so a lazy
+       picker's loader was never invoked and its options never rendered. */
     dataset: {},
     style: {},
     _listeners: {},
@@ -114,6 +117,10 @@ function makeNode(tag, attrs) {
   // Reflect common HTML attributes as plain properties.
   ['value', 'type', 'name', 'id', 'placeholder'].forEach(function (a) {
     if (n.attrs[a] !== undefined) { n[a] = n.attrs[a]; }
+  });
+  // Reflect data-* attributes into dataset, the way a browser does.
+  Object.keys(n.attrs).forEach(function (k) {
+    if (k.indexOf('data-') === 0) { n.dataset[dataKey(k.slice(5))] = n.attrs[k]; }
   });
   n.hidden = 'hidden' in n.attrs;
   n.checked = 'checked' in n.attrs;

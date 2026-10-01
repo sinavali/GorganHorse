@@ -878,6 +878,11 @@ Pages.notifications={
       +'<div class="row gap1 wrap mb3" id="nStats"></div>'
       +'<div class="mb3" id="fbarHost"></div><div id="tbl"><div class="spin"></div></div>';
     var nFilters=App.seed({search:'',status:''});
+    /* Declared before filterBar(): the `type` select below is lazy and calls
+       this loader while the bar is still being built, so `allNotes` must
+       already exist or the lazy loader throws on allNotes.forEach. */
+    var allNotes=[];
+    var unreadTotal=0;
     var nbar=UI.filterBar({
       filters:nFilters,
       searchLabel:'جستجو در عنوان و متن اعلان…',
@@ -894,9 +899,6 @@ Pages.notifications={
       onChange:function(){App.setQuery(nFilters);paint();}
     });
     root.querySelector('#fbarHost').appendChild(nbar);
-
-    var allNotes=[];
-    var unreadTotal=0;
 
     root.querySelector('#readAll').addEventListener('click',function(){
       var b=root.querySelector('#readAll');
@@ -1087,6 +1089,9 @@ Pages.messages={
         });
       }).catch(function(){UI.toast('مسابقه‌ها بارگذاری نشد','e');});
     }
+
+    /* Without this the page rendered an empty shell and never issued a request. */
+    load();
   }
 };
 Pages.messageDetail={
