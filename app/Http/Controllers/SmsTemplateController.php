@@ -178,6 +178,7 @@ final class SmsTemplateController extends BaseController
             $all = $logsDb->select($sql . ' ORDER BY id DESC LIMIT 20000', $params);
             $is_array = is_array($all) ? $all : [];
             $lines = "\xEF\xBB\xBF" . '"شناسه","شماره","وضعیت","پیام","خطا","زمان"' . "\n";
+            $culture = $this->c->get('culture');
             foreach ($is_array as $r) {
                 $cells = [
                     (string) ($r['id'] ?? ''),
@@ -185,7 +186,8 @@ final class SmsTemplateController extends BaseController
                     (string) ($r['status'] ?? ''),
                     (string) ($r['body'] ?? ''),
                     (string) ($r['error'] ?? ''),
-                    (string) ($r['created_at'] ?? ''),
+                    /* Readable, culture-aware timestamp instead of raw UTC ISO. */
+                    $culture->exportCell((string) ($r['created_at'] ?? '')),
                 ];
                 $lines .= implode(',', array_map(static fn ($v) => '"' . str_replace('"', '""', $v) . '"', $cells)) . "\n";
             }

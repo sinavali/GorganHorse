@@ -75,6 +75,7 @@ final class AdminController extends BaseController
                     : (string) $u['username'];
             }
             $lines = "\xEF\xBB\xBF" . '"شناسه","کاربر","نقش","عملیات","نوع موجودیت","شناسه موجودیت","نتیجه","نشانی IP","زمان"' . "\n";
+            $culture = $this->c->get('culture');
             foreach ($is_array as $r) {
                 $actorId = (int) ($r['actor_id'] ?? 0);
                 $actor = $actorId > 0 ? ($names[$actorId] ?? ('#' . $actorId)) : 'سامانه';
@@ -87,7 +88,8 @@ final class AdminController extends BaseController
                     (string) ($r['target_id'] ?? ''),
                     (string) ($r['result'] ?? ''),
                     (string) ($r['ip'] ?? ''),
-                    (string) ($r['created_at'] ?? ''),
+                    /* Readable, culture-aware timestamp instead of raw UTC ISO. */
+                    $culture->exportCell((string) ($r['created_at'] ?? '')),
                 ];
                 $lines .= implode(',', array_map(static fn ($v) => '"' . str_replace('"', '""', $v) . '"', $cells)) . "\n";
             }

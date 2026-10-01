@@ -24,6 +24,7 @@ namespace App\Services\Report;
 use App\Bootstrap\Database;
 use App\Exceptions\ForbiddenException;
 use App\Exceptions\NotFoundException;
+use App\Services\CultureService;
 use App\Services\SettingService;
 
 /**
@@ -34,15 +35,17 @@ final class ReportEngine
 {
     private Database $db;
     private SettingService $settings;
+    private CultureService $culture;
 
     /**
      * @param Database       $db       Main DB.
      * @param SettingService $settings Settings.
      */
-    public function __construct(Database $db, SettingService $settings)
+    public function __construct(Database $db, SettingService $settings, CultureService $culture)
     {
         $this->db = $db;
         $this->settings = $settings;
+        $this->culture = $culture;
     }
 
     /**
@@ -150,6 +153,10 @@ final class ReportEngine
     /**
      * Build a CSV string from an export payload.
      *
+     * Cells go through CultureService::exportCell() so timestamps land in the
+     * file as the same readable dates the report shows on screen, in the
+     * culture that was active when the export ran.
+     *
      * @param array $payload Export payload.
      * @return string CSV content (UTF-8 BOM prefixed).
      */
@@ -161,7 +168,8 @@ final class ReportEngine
         foreach ($payload['rows'] as $row) {
             $line = [];
             foreach ($keys as $k) {
-                $line[] = '"' . str_replace('"', '""', (string) ($row[$k] ?? '')) . '"';
+                $cell = $this->culture->exportCell($row[$k] ?? '');
+                $line[] = '"' . str_replace('"', '""', $cell) . '"';
             }
             $out .= implode(',', $line) . "\n";
         }

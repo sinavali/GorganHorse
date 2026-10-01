@@ -133,7 +133,14 @@ public/views/
   filter chips and the row count, then restores the screen after `window.print()`. The
   `@media print` block in `app.css` lays the page out as a real A4 document: full-width
   grids with repeating table headers, zebra rows, page-break rules, and chrome
-  (sidebar, topbar, filter bars, pagers, buttons) removed.
+  (sidebar, topbar, filter bars, pagers, buttons) removed. The calendar is the one
+  exception to hiding interactive chrome: its 7-column grid loses most of its rows on
+  A4, so print flattens the month into a list of days instead of printing empty boxes.
+- **Exports** are culture-aware. Every CSV writer (report export, audit log, SMS
+  delivery log) passes its cells through `CultureService::exportCell()`, which renders
+  ISO timestamps as the same readable dates the screen shows — `۱۴۰۵/۰۹/۰۵ ۰۴:۰۵`
+  under `fa-IR`, `2026-11-26 04:05` under `en-US`. Numbers are left numeric so
+  spreadsheets can still use them.
 - **Reports filtering** has two layers. The simple bar holds a free-text search (mapped
   to the report's `contains` filter), a date-range control with quick presets (this
   month / 30 days / 90 days / this year / custom Jalali range), the report's main enum
@@ -145,6 +152,15 @@ public/views/
 - **Resilience**: list payloads go through `UI.rows()` (always an array), grid cells are
   rendered inside a try/catch, related lookups tolerate empty tables, and a throwing page
   shows a recoverable error panel instead of a blank screen.
+- **Inbox pages** (notifications, messages) load with an explicit error branch and a
+  retry button rather than an un-`catch`ed promise, so a failed request shows a message
+  instead of an endless spinner. Notifications lead with the unread count, label each
+  item by kind (`UI.notifLabel()`), show a relative time, and separate "mark read" from
+  "open the link" so a card is never an ambiguous click target. Messages preview the
+  body, name the sender and scope, and explain an empty inbox in words.
+- **Profile** carries personal activity from `GET /panel/profile/stats`, which is scoped
+  to the signed-in account (so it is safe for every role): role-aware stat cards, a
+  six-month signup trend, and the signup status mix.
 
 ### Operations
 
@@ -179,6 +195,20 @@ assertion:
   dropdown);
 - `/install` stays an SPA page and `public/index.php` and `app.js` agree on which
   paths are pages vs API calls.
+
+`router-contract.test.js` covers the URL layer and the print path:
+
+- a path carrying an id resolves to its **record** page (`/users/12` →
+  `userDetail`), not the collection — the mapping used to be guarded by
+  `if(id && !pageKey)`, which is never true for a known collection, so clicking a
+  row just re-rendered the grid with the id left in the URL;
+- every sidebar entry navigates through `routePathFor()`. Building the href as
+  `'/' + key` produced `/paymentOrders`, `/smsLog` and `/mySignups`, none of
+  which the page map knows, so those pages rendered the client-side 404;
+- `printHtml()` never calls a bare `num()` — `ui.js` only defines `faNum()`, and
+  the `ReferenceError` aborted `preparePrint()` *before* `window.print()` ran, so
+  the print button did nothing at all;
+- every CSV writer routes its cells through `CultureService::exportCell()`.
 
 `tests/Unit/FrontendContractTest.php` also reflects over every controller to assert each
 public method is callable as `method($request, $ctx)` — the Kernel only passes those two

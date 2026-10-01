@@ -371,6 +371,29 @@ final class CultureService
     }
 
     /**
+     * Render one exported cell (CSV/XLSX) for the active culture.
+     *
+     * Exports used to dump raw UTC ISO-8601 strings into the file, which is
+     * unreadable for the person opening it and does not match the dates they
+     * see on screen. Any value that is a bare ISO date/timestamp is rendered
+     * through formatDate(); everything else is passed through untouched so
+     * numbers stay numeric for spreadsheets.
+     *
+     * @param mixed $value Cell value.
+     * @return string
+     */
+    public function exportCell(mixed $value): string
+    {
+        if (!is_string($value) || $value === '') { return (string) $value; }
+        /* YYYY-MM-DD optionally followed by a time part. `T` + digits keeps
+           this from matching free text that merely starts with a date. */
+        if (preg_match('/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?)?/', $value) !== 1) {
+            return $value;
+        }
+        return $this->formatDate($value, $value[10] !== '');
+    }
+
+    /**
      * Build the culture meta block for the JSON envelope.
      *
      * @return array{culture:string,direction:string,timezone:string}

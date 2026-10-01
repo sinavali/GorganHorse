@@ -111,6 +111,22 @@ I18N.prototype.fmtDateTime=function(iso){
   var hm=String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');
   return this.fmtDate(iso)+' '+this.num(hm);
 };
+/* Coarse "time ago" label for notification and message feeds, where an exact
+   timestamp is less useful than "۳ ساعت پیش". Falls back to fmtDateTime once
+   the gap stops being interesting. */
+I18N.prototype.fmtRelative=function(iso){
+  if(!iso){return '—';}
+  var d=this.local(iso);
+  if(!d){return '—';}
+  var secs=Math.floor((Date.now()-d.getTime())/1000);
+  if(secs<0){return this.fmtDateTime(iso);}
+  var m=Math.floor(secs/60), h=Math.floor(m/60), day=Math.floor(h/24);
+  if(m<1){return this.rtl?'همین حالا':'just now';}
+  if(m<60){return this.rtl?this.num(m)+' دقیقه پیش':this.num(m)+'m ago';}
+  if(h<24){return this.rtl?this.num(h)+' ساعت پیش':this.num(h)+'h ago';}
+  if(day<7){return this.rtl?this.num(day)+' روز پیش':this.num(day)+'d ago';}
+  return this.fmtDate(iso);
+};
 /* Jalali (or Gregorian) <-> ISO for picker inputs, honouring Tehran time. */
 I18N.prototype.toIso=function(y,m,d,h,min){
   var g=this.rtl?jalaliToGregorian(y,m,d):[y,m,d];

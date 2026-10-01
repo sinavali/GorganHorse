@@ -215,6 +215,24 @@ function badge(status){
   return '<span class="badge '+(TONES[String(status)]||'b-mut')+'">'+esc(label||'—')+'</span>';
 }
 
+/* ---------- notification kinds ---------- */
+/*
+   Notifications arrive with a machine `type`; the feed needs a human label or
+   the list reads as a wall of identical tags.
+*/
+var NOTIF_LABELS={
+  'horse.shared':'اشتراک اسب','horse.transfer':'انتقال اسب','horse.health':'سلامت اسب',
+  'signup.created':'ثبت‌نام جدید','signup.paid':'پرداخت ثبت‌نام','signup.confirmed':'ثبت‌نام تأیید‌شده',
+  'signup.cancelled':'لغو ثبت‌نام','signup.waitlist':'ذخیره در فهرست انتظار',
+  'competition.published':'انتشار مسابقه','competition.deadline':'مهلت ثبت‌نام',
+  'payment.paid':'پرداخت موفق','payment.refunded':'استرداد وجه','payment.failed':'پرداخت ناموفق',
+  'result.published':'انتشار نتایج','deadline':'یادآوری مهلت','message':'پیام جدید',
+  'verification':'تأیید حساب','ban':'محدودیت حساب','system':'اعلان سیستم'
+};
+function notifLabel(type){
+  return NOTIF_LABELS[type]||(type||'اعلان');
+}
+
 /* ---------- form helpers ---------- */
 function field(labelText,inputHtml,opts){
   opts=opts||{};
@@ -343,7 +361,7 @@ function printHtml(doc,sub,meta){
     +'<div class="print-brand">هیئت سوارکاری استان گلستان</div>'
     +'<div class="print-doc">'+esc(doc||'گزارش')+'</div>'
     +(sub?'<div class="print-sub">'+esc(sub)+'</div>':'')
-    +'<div class="print-meta">'+num(I18N.fmtDateLongG(new Date().toISOString()))
+    +'<div class="print-meta">'+faNum(I18N.fmtDateLongG(new Date().toISOString()))
     +(meta?' — '+esc(meta):'')+'</div>'
     +'</div>';
 }
@@ -1142,6 +1160,7 @@ window.UI={
   sprite:SPRITE,el:el,esc:esc,ic:ic,faNum:faNum,money:money,av:av,
   toast:toast,busy:busy,drawer:drawer,modal:modal,confirm:confirmDlg,typedConfirm:typedConfirm,closeDialog:closeDialog,
   badge:badge,inp:inp,sel:sel,ta:ta,field:field,formValues:formValues,showErrors:showErrors,
+  notifLabel:notifLabel,
   table:table,pagerHtml:pagerHtml,attachDatepicker:attachDatepicker,toIso:toIso,
   pickField:pickField,initPicks:initPicks,spkFromApi:spkFromApi,editor:editor,initEditors:initEditors,
   filterBar:filterBar,debounce:debounce,initPickers:initPickers,initDatepicker:attachDatepicker,richHtml:richHtml,

@@ -137,7 +137,7 @@ final class Bootstrap
         $c->singleton('results', static fn(Container $c): ResultService => new ResultService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications'), $c->get('sms')));
 
         // Reports.
-        $c->singleton('reports', static fn(Container $c): ReportEngine => new ReportEngine($c->get('db'), $c->get('settings')));
+        $c->singleton('reports', static fn(Container $c): ReportEngine => new ReportEngine($c->get('db'), $c->get('settings'), $c->get('culture')));
         $c->singleton('kpi', static fn(Container $c): KpiService => new KpiService($c->get('db')));
 
         // Admin.

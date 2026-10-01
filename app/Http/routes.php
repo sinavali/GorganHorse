@@ -73,6 +73,7 @@ return [
 
     // ---------------- Profile ----------------
     ['GET',  '/panel/profile',        [UserController::class, 'profile'],      ['auth']],
+    ['GET',  '/panel/profile/stats',  [UserController::class, 'profileStats'], ['auth']],
     ['POST', '/panel/profile',        [UserController::class, 'updateProfile'], ['auth', 'csrf']],
     ['POST', '/panel/profile/avatar', [UserController::class, 'uploadAvatar'], ['auth', 'csrf']],
     ['GET',  '/panel/profile/sessions', [UserController::class, 'sessions'],   ['auth']],

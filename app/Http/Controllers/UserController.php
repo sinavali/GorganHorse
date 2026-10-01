@@ -271,6 +271,19 @@ final class UserController extends BaseController
     }
 
     /**
+     * Personal activity statistics for the current user's Profile page.
+     *
+     * Route:   GET /panel/profile/stats
+     * Auth:    auth
+     * Returns: JSON envelope { data: { role, monthly[], signup_status[], … } }
+     */
+    public function profileStats(Request $request, MiddlewareContext $ctx): Response
+    {
+        $stats = $this->c->get('kpi')->profileStats((int) $ctx->user['id'], (string) $ctx->user['role']);
+        return $this->ok($stats, $ctx);
+    }
+
+    /**
      * Update the current user's own profile.
      *
      * Route:   POST /panel/profile

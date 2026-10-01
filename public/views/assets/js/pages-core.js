@@ -109,6 +109,63 @@ function staffDash(k,role){
     +section('آخرین رویدادها',changelogList(k.recent_changelog))
     +'</div></div>';
 }
+/* ---------- profile activity ---------- */
+/*
+   Renders the personal activity block on the Profile page: role-aware stat
+   cards, a 6-month signup trend, and the signup status mix. Values come from
+   GET /panel/profile/stats, which is scoped to the signed-in account only.
+*/
+function profileStatsHtml(s){
+  s=s||{};
+  var role=s.role;
+  var cards='';
+  if(role==='rider'){
+    var rk=s.ranking;
+    cards+=kpiCard('امتیاز کل',UI.faNum(rk?rk.points:0),'i-star','b-info',rk?('رتبه '+UI.faNum(rk.position)+' از '+UI.faNum(rk.entries)+' شرکت'):'هنوز امتیازی ندارید');
+    cards+=kpiCard('اسف‌های من',UI.faNum(s.my_horses||0),'i-horse','b-ok','');
+    cards+=kpiCard('قهرمانی',UI.faNum(s.my_wins||0),'i-trophy','b-warn','');
+    cards+=kpiCard('شرکت‌ها',UI.faNum(s.entries||0),'i-list','b-mut','');
+  }else if(role==='club'){
+    cards+=kpiCard('سوارکاران باشگاه',UI.faNum(s.club_riders||0),'i-users','b-info','');
+    cards+=kpiCard('اسب‌های باشگاه',UI.faNum(s.club_horses||0),'i-horse','b-ok','');
+    cards+=kpiCard('ثبت‌نام‌های باشگاه',UI.faNum(s.club_signups||0),'i-list','b-mut','');
+    cards+=kpiCard('اعلان‌های خوانده‌نشده',UI.faNum(s.unread_notifications||0),'i-bell','b-mut','');
+  }else{
+    cards+=kpiCard('کاربران در انتظار تأیید',UI.faNum(s.pending_users||0),'i-user','b-warn','');
+    cards+=kpiCard('ثبت‌نام‌های در انتظار',UI.faNum(s.pending_signups||0),'i-list','b-info','');
+    cards+=kpiCard('مسابقات باز',UI.faNum(s.open_competitions||0),'i-trophy','b-ok','');
+    cards+=kpiCard('اعلان‌های خوانده‌نشده',UI.faNum(s.unread_notifications||0),'i-bell','b-mut','');
+  }
+  /* The API groups by YYYY-MM; turn it into a dense 6-point series so gaps
+     render as real zeros instead of collapsing the axis. */
+  var monthly=s.monthly||[];
+  var byYm={};
+  monthly.forEach(function(p){byYm[p.ym]=Number(p.n||0);});
+  var series=[],labels=[];
+  var d=new Date();
+  d.setUTCDate(1);
+  d.setUTCHours(0,0,0,0);
+  for(var i=5;i>=0;i--){
+    var t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()-i,1));
+    var ym=t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0');
+    series.push({date:I18N.fmtDate(ym+'-01'),value:byYm[ym]||0});
+    labels.push(ym);
+  }
+  var mix=(s.signup_status||[]).filter(function(r){return Number(r.n)>0;})
+    .sort(function(a,b){return Number(b.n)-Number(a.n);});
+  var mixMax=mix.length?Number(mix[0].n):1;
+  var mixHtml=mix.length?mix.map(function(r){
+    var v=Number(r.n||0);
+    return '<div class="mt2"><div class="row jb i12"><span>'+UI.badge(r.status)+'</span><b>'+UI.faNum(v)+'</b></div>'
+      +'<div class="bar mt1"><i style="width:'+Math.round(v/mixMax*100)+'%"></i></div></div>';
+  }).join(''):'<div class="empty">ثبت‌نامی ثبت نشده</div>';
+
+  return '<div class="grid c4 mb4">'+cards+'</div>'
+    +'<div class="grid c2">'
+    +section('روند ثبت‌نام من (۶ ماه)',sparkline(series))
+    +section('ترکیب وضعیت ثبت‌نام‌ها',mixHtml)
+    +'</div>';
+}
 function sparkline(series){
   if(!series||!series.length){return '<div class="empty">داده‌ای نیست</div>';}
   var vals=series.map(function(p){return Number(p.value||p.count||0);});
@@ -171,12 +228,18 @@ Pages.profile={
   title:'پروفایل من',icon:'i-user',sec:'حساب',
   render:function(root){
     root.innerHTML=pageHead('پروفایل من')+'<div id="pf"><div class="spin"></div></div>';
+    /* Personal activity block: counts + two charts, above the account form. */
+    API.get('/panel/profile/stats').then(function(s){
+      var host=root.querySelector('#pfStats');
+      if(host){host.innerHTML=profileStatsHtml(s);}
+    }).catch(function(){});
     API.get('/panel/profile').then(function(u){
       var body=root.querySelector('#pf');
       var canAvatar=['rider','club'].indexOf(u.role)>-1;
       var rp=u.rider_profile||{};
       var isRider=u.role==='rider';
-      body.innerHTML='<div class="grid c2">'
+      body.innerHTML='<div id="pfStats" class="mb4"><div class="spin"></div></div>'
+        +'<div class="grid c2">'
         +'<div class="panel pad"><form id="fProf">'
         +'<div class="row gap3 mb4">'+avatarFor(u,52)+'<div><div class="b">'+UI.esc(firstLast(u))+'</div><div class="i12 mut">'+UI.esc(u.username)+' · '+roleLabel(u.role)+'</div><div class="mt1">'+UI.badge(u.verification_status)+'</div>'
         +(canAvatar?'<label class="btn btn-g btn-sm mt2">'+UI.ic('i-plus')+' تصویر پروفایل<input type="file" accept="image/*" hidden id="avUp"/></label>':'')+'</div></div>'
@@ -801,79 +864,199 @@ Pages.rades={
 };
 
 /* ============================== NOTIFICATIONS ============================== */
+/*
+   Notifications are a personal feed, so the page leads with the unread count,
+   labels each item by kind, shows a relative time, and lets an item be marked
+   read in place. Following the link is a separate, explicit action, which is
+   what made the old card ambiguous: clicking anywhere navigated away.
+*/
 Pages.notifications={
   title:'اعلان‌ها',icon:'i-bell',sec:'حساب',
   render:function(root){
-    root.innerHTML=pageHead('اعلان‌ها','','<button class="btn btn-g btn-sm" id="readAll">خواندن همه</button>')
+    root.innerHTML=pageHead('اعلان‌ها','اعلان‌های مربوط به حساب شما.',
+      '<button class="btn btn-g btn-sm" id="readAll">'+UI.ic('i-check')+' خواندن همه</button>')
+      +'<div class="row gap1 wrap mb3" id="nStats"></div>'
       +'<div class="mb3" id="fbarHost"></div><div id="tbl"><div class="spin"></div></div>';
     var nFilters=App.seed({search:'',status:''});
     var nbar=UI.filterBar({
       filters:nFilters,
-      searchLabel:'جستجوی متن اعلان…',
-      selects:[{key:'status',label:'وضعیت',options:[{v:'',l:'همه'},{v:'unread',l:'خوانده‌نشده'},{v:'read',l:'خوانده‌شده'}]}],
+      searchLabel:'جستجو در عنوان و متن اعلان…',
+      selects:[
+        {key:'status',label:'وضعیت',options:[{v:'',l:'همه'},{v:'unread',l:'خوانده‌نشده'},{v:'read',l:'خوانده‌شده'}]},
+        {key:'type',label:'نوع',lazy:function(term,cb){
+            var kinds={};
+            allNotes.forEach(function(n){if(n.type){kinds[n.type]=(kinds[n.type]||0)+1;}});
+            cb([{v:'',l:'همه انواع'}].concat(Object.keys(kinds).sort().map(function(k){
+              return {v:k,l:UI.notifLabel(k)+' ('+UI.faNum(kinds[k])+')'};
+            })));
+          }}
+      ],
       onChange:function(){App.setQuery(nFilters);paint();}
     });
     root.querySelector('#fbarHost').appendChild(nbar);
+
     var allNotes=[];
-    load();
-    document.getElementById('readAll').addEventListener('click',function(){
-      API.post('/panel/notifications/read-all',{}).then(function(){if(App.refreshBell){App.refreshBell();}load();});
+    var unreadTotal=0;
+
+    root.querySelector('#readAll').addEventListener('click',function(){
+      var b=root.querySelector('#readAll');
+      b.disabled=true;
+      API.post('/panel/notifications/read-all',{}).then(function(){
+        if(App.refreshBell){App.refreshBell();}
+        load();
+      }).catch(function(){UI.toast('خواندن همه انجام نشد','e');})
+        .then(function(){b.disabled=false;});
     });
+
+    /* /panel/horse-shares/3 -> /horse-shares/3 */
     function hashFor(link){
       var m=String(link||'').match(/^\/panel\/([a-z-]+)(?:\/(\d+))?/);
-      if(!m){return null;}
-      var map={'payment-orders':'payment-orders',messages:'messages',reports:'reports',users:'users',clubs:'clubs',horses:'horses',competitions:'competitions',signups:'signups','horse-shares':'horse-shares','sms-log':'sms-log'};
-      return '/'+(map[m[1]]||m[1])+(m[2]?'/'+m[2]:'');
+      return m?('/'+m[1]+(m[2]?'/'+m[2]:'')):'';
     }
+
     function load(){
+      root.querySelector('#tbl').innerHTML='<div class="spin"></div>';
       API.get('/panel/notifications').then(function(d){
         allNotes=UI.rows(d);
+        unreadTotal=Number((d&&d.unread)||0);
+        /* The kind filter is derived from the loaded rows, so redraw the bar
+           now that its lazy option list can be answered. */
+        nbar.redraw();
         paint();
+      }).catch(function(err){
+        root.querySelector('#tbl').innerHTML='<div class="panel"><div class="empty">'
+          +UI.esc((err.errors&&err.errors[0].message)||'اعلان‌ها بارگذاری نشد')
+          +'<div class="mt3"><button class="btn btn-g btn-sm" id="nRetry">'+UI.ic('i-refresh')+' تلاش دوباره</button></div></div></div>';
+        var r=root.querySelector('#nRetry');
+        if(r){r.addEventListener('click',load);}
       });
     }
+
     function paint(){
       var q=String(nFilters.search||'').toLowerCase();
       var list=allNotes.filter(function(n){
         var okText=!q||String(n.title||'').toLowerCase().indexOf(q)>-1||String(n.body||'').toLowerCase().indexOf(q)>-1;
         var unread=!Number(n.is_read);
         var okStat=!nFilters.status||(nFilters.status==='unread'?unread:!unread);
-        return okText&&okStat;
+        var okType=!nFilters.type||n.type===nFilters.type;
+        return okText&&okStat&&okType;
       });
       nbar.setCount(UI.faNum(list.length)+' از '+UI.faNum(allNotes.length)+' اعلان');
+
+      root.querySelector('#nStats').innerHTML=
+        '<span class="chip on">'+UI.ic('i-bell')+' خوانده‌نشده: '+UI.faNum(unreadTotal)+'</span>'
+        +'<span class="chip">'+UI.ic('i-list')+' کل: '+UI.faNum(allNotes.length)+'</span>';
+
       root.querySelector('#tbl').innerHTML=list.map(function(n){
-          return '<a class="panel pad-s lift mb2" style="display:block;'+(Number(n.is_read)?'':'border-inline-start:3px solid var(--brand)')+'" href="#" data-nid="'+n.id+'" data-link="'+UI.esc(n.link||'')+'">'
-            +'<div class="row jb gap2"><div class="g1"><div class="b i13">'+UI.esc(n.title)+'</div><div class="i12 mut mt1">'+UI.esc(n.body||'')+'</div></div>'
-            +'<div class="col jend i11 mut">'+I18N.fmtDateTime(n.created_at)+(Number(n.is_read)?'':' <span class="badge b-info">جدید</span>')+'</div></div></a>';
-        }).join('')||'<div class="panel"><div class="empty">اعلانی ندارید</div></div>';
-      root.querySelectorAll('#tbl a[data-nid]').forEach(function(a){
-          a.addEventListener('click',function(e){
-            e.preventDefault();
-            API.post('/panel/notifications/'+a.dataset.nid+'/read',{}).then(function(){if(App.refreshBell){App.refreshBell();}}).catch(function(){});
-            var h=hashFor(a.dataset.link);
-            if(h&&h!==App.path){App.go(h);}
-            else{load();}
-          });
+        var unread=!Number(n.is_read);
+        return '<div class="panel pad-s mb2'+(unread?' lift':'')+'" style="border-inline-start:3px solid '+(unread?'var(--brand)':'transparent')+'">'
+          +'<div class="row jb gap2">'
+          +'<div class="g1">'
+          +'<div class="row gap1 wrap"><span class="badge '+(unread?'b-info':'b-mut')+'">'+UI.esc(UI.notifLabel(n.type))+'</span>'
+          +(unread?'<span class="badge b-warn">جدید</span>':'')+'</div>'
+          +'<div class="b i13 mt1">'+UI.esc(n.title||'—')+'</div>'
+          +(n.body?'<div class="i12 mut mt1">'+UI.esc(n.body)+'</div>':'')
+          +'</div>'
+          +'<div class="col jend gap1 i11 mut" style="white-space:nowrap">'
+          +'<span title="'+UI.esc(I18N.fmtDateTime(n.created_at))+'">'+UI.esc(I18N.fmtRelative(n.created_at))+'</span>'
+          +(unread?'<button class="btn btn-g btn-sm" data-mark="'+n.id+'">خواندم</button>':'<span>خوانده‌شده</span>')
+          +'</div></div>'
+          +(n.link?'<div class="row gap1 mt2"><button class="btn btn-g btn-sm" data-open="'+UI.esc(n.link)+'">مشاهده</button></div>':'')
+          +'</div>';
+      }).join('')||'<div class="panel"><div class="empty">'
+        +(allNotes.length?'اعلانی با این فیلترها نیست':'اعلانی ندارید')
+        +'</div></div>';
+
+      root.querySelectorAll('[data-mark]').forEach(function(b){
+        b.addEventListener('click',function(){
+          API.post('/panel/notifications/'+b.dataset.mark+'/read',{}).then(function(){
+            if(App.refreshBell){App.refreshBell();}
+            load();
+          }).catch(function(){UI.toast('ثبت نشد','e');});
         });
+      });
+      root.querySelectorAll('[data-open]').forEach(function(b){
+        b.addEventListener('click',function(){
+          var h=hashFor(b.dataset.open);
+          if(h){App.go(h);}
+        });
+      });
     }
+
+    load();
   }
 };
 
 /* ============================== MESSAGES (broadcast) ============================== */
+/*
+   Staff see every broadcast, riders see their own inbox. The old list showed a
+   bare row with a recipient count and no preview, so the page read as empty and
+   gave no way to search; it now previews the body, labels the scope and sender,
+   and explains an empty inbox instead of showing a blank panel.
+*/
 Pages.messages={
   title:'پیام‌ها',icon:'i-mail',sec:'حساب',
   render:function(root,ctx){
-    var isStaff=['admin','manager'].includes(ctx.user.role);
-    root.innerHTML=pageHead('پیام‌های همگانی','',
+    var role=(ctx.user&&ctx.user.role)||'rider';
+    var isStaff=['admin','manager'].indexOf(role)>-1;
+    root.innerHTML=pageHead(isStaff?'پیام‌های همگانی':'صندوق پیام',
+      isStaff?'همه پیام‌های ارسالی به کاربران.':'پیام‌های ارسال‌شده به شما.',
       (isStaff?'<button class="btn btn-p btn-sm" id="compose">'+UI.ic('i-send')+' پیام جدید</button>':''))
-      +'<div id="tbl"><div class="spin"></div></div>';
-    var c=root.querySelector('#compose');        if(c){c.addEventListener('click',compose);}
+      +'<div class="mb3" id="fbarHost"></div><div id="tbl"><div class="spin"></div></div>';
+    var mFilters=App.seed({search:'',scope:''});
+    var mbar=UI.filterBar({
+      filters:mFilters,
+      searchLabel:'جستجو در موضوع و متن پیام…',
+      selects:[{key:'scope',label:'دامنه',options:[
+        {v:'',l:'همه'},{v:'global',l:'همه کاربران'},{v:'role',l:'یک نقش'},
+        {v:'competition',l:'یک مسابقه'},{v:'users',l:'کاربران منتخب'}]}],
+      onChange:function(){App.setQuery(mFilters);paint();}
+    });
+    root.querySelector('#fbarHost').appendChild(mbar);
+    var allMsgs=[];
+    var c=root.querySelector('#compose');
+    if(c){c.addEventListener('click',compose);}
+    function scopeLabel(s){
+      return ({global:'همه کاربران',role:'یک نقش',competition:'یک مسابقه',users:'کاربران منتخب'})[s]||s||'—';
+    }
     function load(){
+      root.querySelector('#tbl').innerHTML='<div class="spin"></div>';
       API.get('/panel/messages').then(function(d){
-        var rows=UI.rows(d);
-        root.querySelector('#tbl').innerHTML=rows.map(function(m){
-          return '<a class="panel pad-s lift mb2" style="display:block" href="/messages/'+m.id+'"><div class="row jb gap2"><div class="g1"><div class="b i13">'+UI.esc(m.subject)+'</div>'+(isStaff?'<div class="i11 mut mt1">گیرندگان: '+UI.faNum(m.recipient_count||0)+'</div>':'<div class="i11 mut mt1">'+I18N.fmtDateTime(m.created_at)+'</div>')+'</div>'+I18N.fmtDate(m.created_at)+'</div></a>';
-        }).join('')||'<div class="panel"><div class="empty">پیامی نیست</div></div>';
+        allMsgs=UI.rows(d);
+        paint();
+      }).catch(function(err){
+        root.querySelector('#tbl').innerHTML='<div class="panel"><div class="empty">'
+          +UI.esc((err.errors&&err.errors[0].message)||'پیام‌ها بارگذاری نشد')
+          +'<div class="mt3"><button class="btn btn-g btn-sm" id="mRetry">'+UI.ic('i-refresh')+' تلاش دوباره</button></div></div></div>';
+        var r=root.querySelector('#mRetry');
+        if(r){r.addEventListener('click',load);}
       });
+    }
+    function paint(){
+      var q=String(mFilters.search||'').toLowerCase();
+      var list=allMsgs.filter(function(m){
+        var okText=!q||String(m.subject||'').toLowerCase().indexOf(q)>-1||String(m.body||'').toLowerCase().indexOf(q)>-1;
+        var okScope=!mFilters.scope||m.scope===mFilters.scope;
+        return okText&&okScope;
+      });
+      mbar.setCount(UI.faNum(list.length)+' از '+UI.faNum(allMsgs.length)+' پیام');
+      root.querySelector('#tbl').innerHTML=list.map(function(m){
+        var meta=isStaff
+          ? 'دامنه: '+UI.esc(scopeLabel(m.scope))+' · گیرندگان: '+UI.faNum(Number(m.recipient_count||0))
+          : 'از '+UI.esc(m.sender_name||'سامانه');
+        var fresh=!(Number(m.is_read)===1||m.read_at);
+        return '<a class="panel pad-s lift mb2" style="display:block;border-inline-start:3px solid '+(fresh?'var(--brand)':'transparent')+'" href="/messages/'+m.id+'">'
+          +'<div class="row jb gap2"><div class="g1">'
+          +'<div class="row gap1 wrap">'+(fresh?'<span class="badge b-info">جدید</span>':'<span class="badge b-mut">خوانده‌شده</span>')+'</div>'
+          +'<div class="b i13 mt1">'+UI.esc(m.subject||'(بدون موضوع)')+'</div>'
+          +'<div class="i11 mut mt1">'+meta+'</div>'
+          +(m.body?'<div class="i12 mut mt1 trunc">'+UI.esc(m.body)+'</div>':'')
+          +'</div>'
+          +'<div class="col jend i11 mut" style="white-space:nowrap" title="'+UI.esc(I18N.fmtDateTime(m.created_at))+'">'
+          +UI.esc(I18N.fmtRelative(m.created_at))+'</div></div></a>';
+      }).join('')||'<div class="panel"><div class="empty">'
+        +(allMsgs.length?'پیامی با این فیلترها نیست':(isStaff?'هنوز پیامی ارسال نشده':'هنوز پیامی برای شما ارسال نشده'))
+        +'</div></div>';
     }
     function compose(){
       API.get('/panel/competitions').then(function(comps){
@@ -902,7 +1085,7 @@ Pages.messages={
           API.post('/panel/messages',v).then(function(d){UI.closeDialog();UI.toast('به '+UI.faNum(d.recipients||0)+' کاربر ارسال شد');load();})
             .catch(function(err){UI.showErrors(f,err.errors);});
         });
-      });
+      }).catch(function(){UI.toast('مسابقه‌ها بارگذاری نشد','e');});
     }
   }
 };
@@ -911,9 +1094,22 @@ Pages.messageDetail={
   render:function(root,ctx,id){
     root.innerHTML='<div class="spin"></div>';
     API.get('/panel/messages/'+id).then(function(m){
-      root.innerHTML=pageHead(m.subject,I18N.fmtDateTime(m.created_at),'<a class="btn btn-g btn-sm" href="/messages">'+UI.ic('i-cr')+' بازگشت</a>')
-        +'<div class="panel pad" style="line-height:2">'+UI.esc(m.body)+'</div>';
+      root.innerHTML=pageHead(m.subject||'(بدون موضوع)',
+        I18N.fmtDateTime(m.created_at),
+        '<a class="btn btn-g btn-sm" href="/messages">'+UI.ic('i-cr')+' بازگشت به پیام‌ها</a>')
+        +'<div class="panel pad mb3" style="line-height:2.1">'+UI.esc(m.body||'')+'</div>'
+        +'<div class="panel pad-s i12 mut">'
+        +'<div class="row gap3 wrap">'
+        +'<span>فرستنده: '+UI.esc(m.sender_name||'سامانه')+'</span>'
+        +'<span>دامنه: '+UI.esc(({global:'همه کاربران',role:'یک نقش',competition:'یک مسابقه',users:'کاربران منتخب'})[m.scope]||m.scope||'—')+'</span>'
+        +'<span>گیرندگان: '+UI.faNum(Number(m.recipient_count||0))+'</span>'
+        +'<span>'+UI.esc(I18N.fmtDateTime(m.created_at))+'</span>'
+        +'</div></div>';
       API.post('/panel/messages/'+id+'/read',{}).catch(function(){});
+    }).catch(function(err){
+      root.innerHTML=pageHead('پیام','', '<a class="btn btn-g btn-sm" href="/messages">'+UI.ic('i-cr')+' بازگشت</a>')
+        +'<div class="panel"><div class="empty">'
+        +UI.esc((err.errors&&err.errors[0].message)||'این پیام در دسترس نیست')+'</div></div>';
     });
   }
 };

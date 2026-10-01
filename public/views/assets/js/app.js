@@ -172,7 +172,10 @@ function drawNav(){
   host.innerHTML=items?html:loadingNav();
   host.querySelectorAll('[data-nav]').forEach(function(b){
     b.addEventListener('click',function(){
-      App.go('/'+b.dataset.nav);
+      /* routePathFor() maps page keys to their real URLs. Using '/'+key
+         directly produced /paymentOrders, /smsLog, /mySignups … which the
+         pageMap does not know, so those pages 404'd. */
+      App.go(routePathFor(b.dataset.nav));
       closeSidebar();
     });
   });
@@ -568,12 +571,15 @@ function route(){
     reports:'reports',settings:'settings',sms:'sms','sms-log':'smsLog',audit:'audit',backups:'backups',
     messages:'messages',notifications:'notifications',search:'search',standings:'standings'
   };
+  /* A path with an id is a RECORD page (/users/12), which must win over the
+     collection page of the same name (/users). This test used to be
+     `if(id&&!pageKey)`, but pageKey is always set for these collections, so
+     the mapping never ran and clicking a row re-rendered the grid with the id
+     still sitting in the URL. */
+  var dmap={users:'userDetail',clubs:'clubDetail',horses:'horseDetail',
+    competitions:'competitionDetail','payment-orders':'paymentOrderDetail',messages:'messageDetail'};
+  if(id&&dmap[key]&&App.pages[dmap[key]]){return renderInto(dmap[key],id);}
   var pageKey=pageMap[key];
-  if(id&&!pageKey){
-    var dmap={users:'userDetail',clubs:'clubDetail',horses:'horseDetail',
-      competitions:'competitionDetail','payment-orders':'paymentOrderDetail',messages:'messageDetail'};
-    if(dmap[key]){return renderInto(dmap[key],id);}
-  }
   if(!pageKey||!App.pages[pageKey]){
     view.innerHTML='<div class="panel"><div class="empty">'+UI.ic('i-help')+'<div>این صفحه یافت نشد.</div><a class="btn btn-g mt3" href="/dashboard">داشبورد</a></div></div>';
     document.getElementById('pageTitle').textContent='۴۰۴';

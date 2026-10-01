@@ -509,7 +509,11 @@ final class DemoSeeder
                     'amount_irt' => $amount, 'status' => $orderStatus,
                     'authority' => 'A' . random_digits(20),
                     'ref_id' => $orderStatus === 'paid' || $orderStatus === 'refunded' || $orderStatus === 'pending_refund'
-                        ? (string) random_int(100000000, 999999999) : null,
+                        /* Derived from the monotonic counter, not random: a
+                           random 9-digit value collides often enough (~2% of
+                           runs at ~6k orders) to break payment_orders' UNIQUE
+                           index and make the suite flaky. */
+                        ? (string) (100000000 + $count) : null,
                     'card_pan' => '6037****' . random_digits(4), 'description' => 'شرکت در مسابقه',
                     'gateway' => 'zarinpal', 'verified_at' => $orderStatus !== 'pending' ? $cr['start_at'] : null,
                     'refunded_at' => $orderStatus === 'refunded' ? $now : null,

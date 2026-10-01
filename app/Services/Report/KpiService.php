@@ -197,6 +197,92 @@ final class KpiService
     }
 
     /**
+     * Personal activity summary for the current user's own Profile page.
+     *
+     * Unlike staffDashboard() (organisation-wide) this is scoped to one
+     * account, so it is safe to show to every role. It carries the numbers
+     * worth charting: a 6-month signup/competition series, per-status
+     * distribution, and the account's own standing.
+     *
+     * @param int    $userId User id.
+     * @param string $role   User role.
+     * @return array
+     */
+    public function profileStats(int $userId, string $role): array
+    {
+        $out = [
+            'role' => $role,
+            'unread_notifications' => (int) $this->db->scalar(
+                'SELECT COUNT(*) FROM notifications WHERE user_id = :u AND is_read = 0',
+                ['u' => $userId]
+            ),
+            'signup_status' => $this->db->select(
+                "SELECT status, COUNT(*) AS n FROM signups WHERE rider_user_id = :u GROUP BY status",
+                ['u' => $userId]
+            ),
+            'monthly' => $this->db->select(
+                "SELECT substr(created_at,1,7) AS ym, COUNT(*) AS n
+                 FROM signups WHERE rider_user_id = :u AND created_at >= :since
+                 GROUP BY ym ORDER BY ym",
+                ['u' => $userId, 'since' => gmdate('Y-m-01', strtotime('-5 months'))]
+            ),
+        ];
+
+        if ($role === 'rider') {
+            $out['my_horses'] = (int) $this->db->scalar(
+                "SELECT COUNT(*) FROM horses WHERE owner_user_id = :u AND status = 'active'",
+                ['u' => $userId]
+            );
+            $out['my_wins'] = (int) $this->db->scalar(
+                'SELECT COUNT(*) FROM signups WHERE rider_user_id = :u AND is_winner = 1',
+                ['u' => $userId]
+            );
+            $out['entries'] = (int) $this->db->scalar(
+                'SELECT COUNT(*) FROM signups WHERE rider_user_id = :u',
+                ['u' => $userId]
+            );
+            $out['ranking'] = $this->riderRankFor($userId);
+        } elseif ($role === 'club') {
+            /* A club ACCOUNT owns its club row via clubs.user_id, but
+               signups.affiliation_club_id points at clubs.id — resolve one to
+               the other before counting. */
+            $clubId = (int) $this->db->scalar('SELECT id FROM clubs WHERE user_id = :u LIMIT 1', ['u' => $userId]);
+            $out['club_id'] = $clubId;
+            if ($clubId > 0) {
+                $out['club_riders'] = (int) $this->db->scalar(
+                    'SELECT COUNT(DISTINCT rider_user_id) FROM signups WHERE affiliation_club_id = :c',
+                    ['c' => $clubId]
+                );
+                $out['club_horses'] = (int) $this->db->scalar(
+                    'SELECT COUNT(DISTINCT horse_id) FROM signups WHERE affiliation_club_id = :c',
+                    ['c' => $clubId]
+                );
+                $out['club_signups'] = (int) $this->db->scalar(
+                    'SELECT COUNT(*) FROM signups WHERE affiliation_club_id = :c',
+                    ['c' => $clubId]
+                );
+            } else {
+                $out['club_riders'] = 0;
+                $out['club_horses'] = 0;
+                $out['club_signups'] = 0;
+            }
+        } else {
+            /* Staff have no personal competition record; show their review
+               workload instead, which is the number they care about. */
+            $out['pending_users'] = (int) $this->db->scalar(
+                "SELECT COUNT(*) FROM users WHERE verification_status = 'pending'"
+            );
+            $out['pending_signups'] = (int) $this->db->scalar(
+                "SELECT COUNT(*) FROM signups WHERE status IN ('paid','pending_payment')"
+            );
+            $out['open_competitions'] = (int) $this->db->scalar(
+                "SELECT COUNT(*) FROM competitions WHERE status IN ('open','closed')"
+            );
+        }
+        return $out;
+    }
+
+    /**
      * This rider's row in the cumulative ranking (null when unranked).
      *
      * @param int $userId Rider id.

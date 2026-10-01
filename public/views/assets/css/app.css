@@ -488,10 +488,17 @@ th.sorted-asc .srt,th.sorted-desc .srt{color:var(--brand);opacity:1}
   .kpi,.kv{break-inside:avoid}
   .av,.kic{display:none!important}
 
-  /* calendars and boards print as lists, not clipped grids */
-  .cal-cell{min-height:0!important;page-break-inside:avoid}
-  .cal-grid,.cal-head{display:none!important}
+  /* calendars print as a flat list of days, not a clipped 7-column grid:
+     a month grid loses most of its rows on A4 and prints as blank boxes */
+  .cal-head{display:none!important}
+  .cal-grid{display:block!important}
+  .cal-cell{min-height:0!important;border:0!important;border-bottom:1px dotted #bbb!important;
+    padding:1.5mm 0!important;page-break-inside:avoid;break-inside:avoid}
   .cal-cell.out{display:none!important}
+  .cal-cell:empty{display:none!important}
+  .cal-n{font-weight:700;color:#333!important;display:inline-block;min-width:12mm}
+  .cal-ev{display:inline-block!important;width:auto!important;border:0!important;background:transparent!important;
+    padding:0 2mm 0 0!important;font-size:9.5pt}
 
   a{color:#000!important;text-decoration:none!important}
   a[href]:after{content:""}

@@ -56,6 +56,7 @@ final class FrontendContractTest
         self::spaRouteParity();
         self::runNode($node, 'tests/Frontend/filter-bar.test.js', 'filter-bar contract');
         self::runNode($node, 'tests/Frontend/picker-contract.test.js', 'picker contract');
+        self::runNode($node, 'tests/Frontend/router-contract.test.js', 'router contract');
         self::runNode($node, 'tests/Frontend/spa-contract.test.js', 'SPA contract');
         self::jsSyntax($node);
 
