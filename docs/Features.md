@@ -119,7 +119,7 @@ Edit policy:
 
 - Status: Implemented
 - Description: Unified report engine with 8 presets (signups, revenue, results, horses, riders, clubs, payments, bans). AG Grid with server-side row model, whitelist-driven SQL queries (no raw user input in SQL), Shamsi date filter conversion, column visibility/order/filter/sort persisted in localStorage per user per report, XLSX and CSV export via signed URLs (1-hour expiry), report sharing (live filter state sharing between users), and summary KPI tiles per report.
-- Notes: Role scoping applied transparently. Export: XLSX via SheetJS on frontend, CSV server-generated. Signed URL: HMAC-signed, expires in 1 hour. See Technical §18, User Usage §12.
+- Notes: Role scoping applied transparently. Export: XLSX via SheetJS on frontend, CSV server-generated. Signed URL: HMAC-signed, expires in 1 hour. See Technical §18, User Usage §12. Filtering is two-layered: a simple bar (search, date-range presets, status chips, page size, clear-all) plus an advanced drawer with every declared filter column and operator (`eq`, `ne`, `contains`, `gt`, `gte`, `lt`, `lte`, `in`, `between`). Full state lives in the query string, and the result grid has a custom print layout.
 - Considerations: Grid state persists in localStorage. Page number always resets to 1 when filters change. Riders can share reports only with Managers/Admins.
 - Status Description: Fully implemented. Complete reporting system with 8 report types, filtering, export, sharing, and role-based scoping.
 
@@ -169,7 +169,7 @@ Edit policy:
 
 - Status: Implemented
 - Description: Server-rendered A4 print views (print.css, no JavaScript dependency) for 8 entity types: Competition (single + list), Horse (single + list), Rider (single), Club (single + list), Payment (single + list + selected), Signup sheet (per competition), Standings (per rider, per horse, per rider-horse pair), Payment list. Each print view includes branded header (brand + entity title + Jalali date), QR code, and footer (page number + federation name). QR codes are auth-gated.
-- Notes: Print header includes Shamsi date. QR encodes current panel URL + query state. Print styles optimized for A4 portrait with 12mm margins. See Technical §27, User Usage §13.
+- Notes: Print header includes Shamsi date. QR encodes current panel URL + query state. Print styles optimized for A4 portrait with 12mm margins. See Technical §27, User Usage §13. The SPA grids and detail pages have their own print path: a header print button on every page (`pageHead()`), `UI.preparePrint()` injecting a federation letterhead with the document title, active filter chips and row count, and an `@media print` block in `app.css` that repeats table headers across pages, zebra-strips rows, avoids breaking records and hides the app chrome.
 - Considerations: QR codes require authenticated session (not usable by unauthenticated visitors). Print views are desktop-oriented but accessible on mobile.
 - Status Description: Fully implemented. Print views and QR codes available for all 8 entity types with A4 formatting and authenticated QR security.
 
@@ -309,9 +309,9 @@ Edit policy:
 
 ### Feature: Competition Calendar View
 
-- Status: Not Implemented
+- Status: Implemented
 - Description: Visual calendar display (monthly/weekly) showing all upcoming competitions with their dates, venues, and statuses. Admin/Manager can click a date to see competition details or create a new competition for that date. This feature was specified in the User Usage spec (§7.12 header action "Calendar view") but no route, controller, view, or JavaScript component exists.
-- Notes: Would need a new controller method, route, and calendar component (Alpine.js or vanilla JS calendar). Could integrate with Jalali calendar rendering.
+- Notes: Implemented as `GET /panel/competitions/calendar` (month grid, venue/status filters, month navigation, deadline countdowns) rendered by the `/calendar` SPA route.
 - Considerations: Especially useful in Iran where competitions follow Jalali calendar dates and seasonal schedules (indoor winter, outdoor spring/summer).
 - Status Description: Not implemented. No route, controller, view, or calendar component exists despite being specified in the User Usage document as a header action on the competitions page.
 
@@ -349,9 +349,9 @@ Edit policy:
 
 ### Feature: Automatic Scheduled Backups
 
-- Status: Not Implemented
+- Status: Implemented
 - Description: Configurable automatic backup scheduling (daily, weekly, monthly) instead of the current manual-only backup system. Admins would set a backup frequency and optional retention count. Backups would be created automatically at scheduled times and listed on the backups page with creation time and size. Currently all backups require manual Admin action via /panel/backups.
-- Notes: Since no cron or daemon is allowed per spec, this would use request-triggered scheduling (1-in-N requests triggers a check and creates backup if due). See Technical §3 (No cron, no queue, no daemon).
+- Notes: Implemented by `SchedulerService` (settings `scheduler.auto_backup`, `scheduler.backup_keep`), driven by `cron.php` or `POST /panel/cron?key=…`. Jobs are idempotent per day, so running the scheduler frequently is safe.
 - Considerations: Automatic backups are critical for data safety. Request-triggered scheduling is the only viable approach in this architecture (no cron, no daemon).
 - Status Description: Not implemented. All backups are currently manual. No scheduling mechanism exists for automatic backup creation.
 
@@ -359,9 +359,9 @@ Edit policy:
 
 ### Feature: Rider Cumulative Performance Ranking
 
-- Status: Not Implemented
+- Status: Implemented
 - Description: Cross-competition ranking system for riders based on cumulative results (wins, placements, points). Riders would see their ranking in the federation standings, updated in real-time as results are published. Ranking could be by total wins, average position, or a custom points system. Currently results are only viewable per-competition with no federation-wide ranking.
-- Notes: Would need a ranking service computing scores from confirmed/published results. Could be cached with invalidation on result changes. See User Usage §9.1 (my wins shown as KPI but no ranking).
+- Notes: Implemented as `KpiService::riderRanking()` served by `GET /panel/standings/ranking` (JSON + CSV) and the `/ranking` page. Points: 1st = 10, 2nd = 6, 3rd = 4, other placements = 2.
 - Considerations: Rider rankings are a key motivator in equestrian sports. This would create federation-wide competition beyond individual events.
 - Status Description: Not implemented. Results exist only at the individual competition level. No cross-competition ranking or federation standings system exists.
 
@@ -379,9 +379,9 @@ Edit policy:
 
 ### Feature: Competition Entry Deadline Alerts
 
-- Status: Not Implemented
+- Status: Implemented
 - Description: Automated alerts (in-panel notifications and optional SMS) sent when competition registration is approaching its deadline — for example, 48 hours before, 24 hours before, and 1 hour before. Admins and managers would receive reminders; riders would be notified that registration is closing. Currently no deadline tracking or automated alerting exists.
-- Notes: Would need a deadline check mechanism (request-triggered: check on each panel visit if a deadline is within alert window). Could add settings for alert timing intervals.
+- Notes: Implemented by the `deadline_alerts` job in `SchedulerService` (window from `scheduler.deadline_alert_days`), surfaced on the dashboard "needs attention" queue (`KpiService::attention()`).
 - Considerations: Registration deadlines are critical for competition organization. In Iran where planning can be last-minute, advance warnings help ensure full participation.
 - Status Description: Not implemented. Registration deadlines are visible on competition pages but no automated alerts or countdown timers exist.
 
@@ -389,9 +389,9 @@ Edit policy:
 
 ### Feature: Horse Health and Veterinary Records
 
-- Status: Not Implemented
+- Status: Implemented
 - Description: Track veterinary records, vaccination schedules, health certificates, and insurance documentation for each horse. Essential for federation compliance in Iran where equestrian sports require up-to-date health documentation. Fields would include: vet visit date, diagnosis, treatment, next vaccination date, health certificate expiry, insurance policy number and expiry.
-- Notes: Would need new tables (horse_health_records, horse_documents), views, and controller endpoints. Could leverage the existing media upload system for document attachments.
+- Notes: Implemented with a `horse_health_records` table (created by `database/migrations.php`), `HorseHealthService`, `/panel/horses/{id}/health` routes, and a health section on the horse detail page.
 - Considerations: Health certificates are mandatory for competition participation in Iran. This feature would help clubs and managers ensure horses are competition-ready.
 - Status Description: Not implemented. No health, veterinary, or insurance tracking features exist for horses despite being required for federation compliance.
 
@@ -401,7 +401,7 @@ Edit policy:
 
 - Status: Not Implemented
 - Description: Historical report of SMS delivery performance showing: total SMS sent, delivered, failed, and skipped over time. Cost tracking per message. Delivery rate per notification type. Per-recipient delivery status. Currently SMS logs exist in logs.sqlite.sms_logs but no reporting or analytics interface exists for SMS performance.
-- Notes: Would need a report type for SMS, aggregation queries on logs.sqlite.sms_logs, and a view with date filters and status breakdown. See Technical §23.4 (SMS retention: 90 days).
+- Notes: Partially covered by the `/sms-log` page: delivery success rate, error breakdown, per-message status and CSV export of the delivery log. It is a dedicated page rather than a `ReportEngine` report type; per-recipient status and cost tracking are still missing.
 - Considerations: SMS costs money via MelyPayamak credits. A delivery report helps admins control costs and understand notification effectiveness.
 - Status Description: Not implemented. SMS logs are stored but no reporting interface exists. Admins cannot review SMS delivery rates or costs.
 
@@ -449,9 +449,9 @@ Edit policy:
 
 ### Feature: Audit Log Export for Regulatory Compliance
 
-- Status: Not Implemented
+- Status: Partially Implemented
 - Description: Export audit logs in a standardized, portable format (PDF or CSV) for submission to federation authorities or regulatory bodies. Filters by date range, actor, action type, and result. Currently audit logs are viewable in the panel (/panel/audit) but no export functionality exists.
-- Notes: Would add export button to the audit page, generating CSV or PDF from logs.sqlite.audit_logs. Could support date range filters and format selection.
+- Notes: `GET /panel/audit?format=csv` exports the currently filtered audit log (same filters as the grid) plus a print view. PDF output is still not generated server-side.
 - Considerations: Iranian sports federations may be required to provide audit trails to governing bodies. Export capability ensures compliance with regulatory requirements.
 - Status Description: Not implemented. Audit logs are viewable but cannot be exported. No portable audit trail format exists for regulatory submission.
 
@@ -489,9 +489,9 @@ Edit policy:
 
 ### Feature: Registration Countdown Timer
 
-- Status: Not Implemented
+- Status: Implemented
 - Description: Visual countdown timer on competition detail pages showing days, hours, and minutes remaining until registration closes. Visible to all authenticated users (riders, managers, admins). Timer updates in real-time via Alpine.js. When registration closes, timer displays "Registration Closed" in red.
-- Notes: Would need a simple Alpine.js countdown component reading competition end_registration_at, converted from UTC to local time. The conversion from Shamsi display time is straightforward via existing culture services.
+- Notes: Implemented as `UI.countdown()` (dependency-free interval timer, Tehran time, fa-IR digits) on the competition detail page, the calendar cells and the attention queue.
 - Considerations: Registration deadlines are critical for riders to plan their participation. A visible countdown creates urgency and reduces missed deadlines.
 - Status Description: Not implemented. Registration deadline dates are visible on competition pages but no countdown timer or urgency indicator exists.
 
@@ -508,4 +508,4 @@ Edit policy:
 ---
 
 <!-- ============ FEATURE COUNT SUMMARY ============ -->
-<!-- Implemented: 26 | Partially Implemented: 2 | Not Implemented: 20 | Total: 48 -->
+<!-- Implemented: 32 | Partially Implemented: 3 | Not Implemented: 13 | Total: 48 -->

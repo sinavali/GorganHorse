@@ -26,14 +26,13 @@ final class RadeController extends BaseController
      *
      * Route:   GET /panel/rades
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function index(Request $request, MiddlewareContext $ctx): Response
     {
         $filters = ['active' => (string) $request->query('active', 'all'), 'search' => (string) $request->query('search', '')];
         $rows = $this->c->get('rades')->list($filters);
-        if ($request->isJson()) { return $this->ok($rows, $ctx, 200, ['total' => count($rows), 'filtered' => count($rows)]); }
-        return $this->view('panel/rades', ['rows' => $rows, 'filters' => $filters, 'csrf' => $ctx->csrf]);
+        return $this->ok($rows, $ctx, 200, ['total' => count($rows), 'filtered' => count($rows)]);
     }
 
     /**
@@ -53,13 +52,11 @@ final class RadeController extends BaseController
      *
      * Route:   GET /panel/rades/{id}
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function show(Request $request, MiddlewareContext $ctx): Response
     {
-        $rade = $this->c->get('rades')->get((int) $request->attr('id'));
-        if ($request->isJson()) { return $this->ok($rade, $ctx); }
-        return $this->view('panel/rade-edit', ['record' => $rade, 'csrf' => $ctx->csrf]);
+        return $this->ok($this->c->get('rades')->get((int) $request->attr('id')), $ctx);
     }
 
     /**

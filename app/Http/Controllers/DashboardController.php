@@ -5,8 +5,8 @@ declare(strict_types=1);
  * File: app/Http/Controllers/DashboardController.php
  *
  * Purpose:
- *   Role-aware dashboard: renders the panel root and returns KPI data for the
- *   Admin/Manager/Rider/Club dashboards (Blueprint §13.3, User Usage §7.1, §8, §9.1, §10.1).
+ *   Role-aware dashboard KPI data for the Admin/Manager/Rider/Club dashboards
+ *   (Blueprint §13.3, User Usage §7.1, §8, §9.1, §10.1). JSON only.
  *
  * @package App\Http\Controllers
  */
@@ -24,28 +24,15 @@ use App\Http\MiddlewareContext;
 final class DashboardController extends BaseController
 {
     /**
-     * Render the dashboard matching the current role.
+     * Return dashboard KPI data for the current role.
      *
      * Route:   GET /panel
      * Auth:    auth (any role)
-     * Returns: HTML dashboard
+     * Returns: JSON envelope { data: { role, kpi, user } }
      */
     public function index(Request $request, MiddlewareContext $ctx): Response
     {
-        $kpi = $this->c->get('kpi');
-        $role = (string) $ctx->user['role'];
-        $data = match ($role) {
-            'admin', 'manager' => $kpi->staffDashboard($ctx->user),
-            'rider' => $kpi->riderDashboard((int) $ctx->user['id']),
-            'club' => $kpi->clubDashboard((int) $ctx->user['id']),
-            default => [],
-        };
-        return $this->view('panel/dashboard', [
-            'role' => $role,
-            'kpi' => $data,
-            'csrf' => $ctx->csrf,
-            'user' => $ctx->user,
-        ]);
+        return $this->data($request, $ctx);
     }
 
     /**
@@ -53,7 +40,7 @@ final class DashboardController extends BaseController
      *
      * Route:   GET /panel/dashboard/data
      * Auth:    auth (any role)
-     * Returns: JSON envelope { data: {...} }
+     * Returns: JSON envelope { data: { role, kpi, user } }
      */
     public function data(Request $request, MiddlewareContext $ctx): Response
     {
@@ -65,6 +52,6 @@ final class DashboardController extends BaseController
             'club' => $kpi->clubDashboard((int) $ctx->user['id']),
             default => [],
         };
-        return $this->ok($data, $ctx);
+        return $this->ok(['role' => $role, 'kpi' => $data, 'user' => $ctx->user], $ctx);
     }
 }

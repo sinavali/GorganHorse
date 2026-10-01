@@ -6,8 +6,10 @@ declare(strict_types=1);
  *
  * Purpose:
  *   Shared behaviour for every controller: service container access, envelope
- *   building, request input helpers, pagination parsing, view rendering, and a
- *   uniform JSON response factory (Technical §10).
+ *   building, request input helpers, pagination parsing, and a uniform JSON
+ *   response factory (Technical §10). The backend exposes a pure JSON API; no
+ *   server-side view rendering is performed (the UI lives in a separate
+ *   repository and consumes this API).
  *
  * @package App\Http\Controllers
  */
@@ -126,18 +128,4 @@ abstract class BaseController
         return $request->post();
     }
 
-    /**
-     * Render a PHP view template within a layout.
-     *
-     * @param string $template Template path under app/Views (without .php).
-     * @param array  $data     View data.
-     * @param string $layout   Layout name.
-     * @return Response
-     */
-    protected function view(string $template, array $data = [], string $layout = 'panel'): Response
-    {
-        $data['__container'] = $this->c;
-        $html = $this->c->get('view')->render($template, $data, $layout);
-        return Response::html($html);
-    }
 }

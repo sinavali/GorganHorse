@@ -6,7 +6,8 @@ declare(strict_types=1);
  *
  * Purpose:
  *   HTTP layer for horses: CRUD, status, images, shares, transfers, history,
- *   import/export, print, and bulk operations (Blueprint §10.3; User Usage §7.6–7.7, §9.2).
+ *   import/export, and bulk operations (Blueprint §10.3; User Usage §7.6–7.7, §9.2).
+ *   JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -42,10 +43,7 @@ final class HorseController extends BaseController
             'owner_user_id' => (int) $request->query('owner_user_id', 0),
         ];
         $result = $this->c->get('horses')->list($filters, $ctx->actor(), $this->page($request), $this->perPage($request));
-        if ($request->isJson()) {
-            return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
-        }
-        return $this->view('panel/horses', ['rows' => $result['rows'], 'total' => $result['total'], 'filters' => $filters, 'csrf' => $ctx->csrf, 'role' => $ctx->user['role']]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
     }
 
     /**
@@ -61,24 +59,22 @@ final class HorseController extends BaseController
     }
 
     /**
-     * Show a horse.
+     * Show a horse with its images, shares, transfers, and history.
      *
      * Route:   GET /panel/horses/{id}
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope { data: { horse, images, shares, transfers, history } }
      */
     public function show(Request $request, MiddlewareContext $ctx): Response
     {
         $horse = $this->c->get('horses')->get((int) $request->attr('id'), $ctx->actor());
-        if ($request->isJson()) { return $this->ok($horse, $ctx); }
-        $images = $this->c->get('media')->horseImages((int) $horse['id']);
-        $shares = $this->c->get('horses')->sharesForHorse((int) $horse['id']);
-        $transfers = $this->c->get('horses')->transfersForHorse((int) $horse['id']);
-        $history = $this->c->get('horses')->performanceHistory((int) $horse['id']);
-        return $this->view('panel/horse-edit', [
-            'record' => $horse, 'images' => $images, 'shares' => $shares, 'transfers' => $transfers,
-            'history' => $history, 'csrf' => $ctx->csrf, 'role' => $ctx->user['role'],
-        ]);
+        return $this->ok([
+            'horse' => $horse,
+            'images' => $this->c->get('media')->horseImages((int) $horse['id']),
+            'shares' => $this->c->get('horses')->sharesForHorse((int) $horse['id']),
+            'transfers' => $this->c->get('horses')->transfersForHorse((int) $horse['id']),
+            'history' => $this->c->get('horses')->performanceHistory((int) $horse['id']),
+        ], $ctx);
     }
 
     /**
@@ -274,19 +270,6 @@ final class HorseController extends BaseController
     }
 
     /**
-     * Render a horse print view.
-     *
-     * Route:   GET /panel/horses/{id}/print
-     * Auth:    auth
-     * Returns: HTML print page
-     */
-    public function print(Request $request, MiddlewareContext $ctx): Response
-    {
-        $horse = $this->c->get('horses')->get((int) $request->attr('id'), $ctx->actor());
-        return $this->view('print/horse', ['record' => $horse, 'title' => $horse['name']], 'print');
-    }
-
-    /**
      * Import horses from CSV.
      *
      * Route:   POST /panel/horses/import
@@ -355,13 +338,11 @@ final class HorseController extends BaseController
      *
      * Route:   GET /panel/horse-shares
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function sharesInbox(Request $request, MiddlewareContext $ctx): Response
     {
-        $rows = $this->c->get('horses')->sharesForRecipient((int) $ctx->user['id']);
-        if ($request->isJson()) { return $this->ok($rows, $ctx); }
-        return $this->view('panel/horse-shares', ['rows' => $rows, 'csrf' => $ctx->csrf]);
+        return $this->ok($this->c->get('horses')->sharesForRecipient((int) $ctx->user['id']), $ctx);
     }
 
     /**
@@ -376,5 +357,77 @@ final class HorseController extends BaseController
         $action = str_ends_with($request->path(), 'accept') ? 'accept' : 'reject';
         $this->c->get('horses')->respondToShare((int) $request->attr('id'), $action, $ctx->actor());
         return $this->ok(null, $ctx);
+    }
+
+    /**
+     * Health / vaccination records of one horse.
+     *
+     * Route:   GET /panel/horses/{id}/health
+     * Auth:    auth (riders see only their own horses)
+     * Returns: JSON envelope { data: { rows, types } }
+     */
+    public function health(Request $request, MiddlewareContext $ctx): Response
+    {
+        $horseId = (int) $request->attr('id');
+        return $this->ok([
+            'rows' => $this->c->get('horse_health')->listFor($horseId, $ctx->actor()),
+            'types' => \App\Services\HorseHealthService::types(),
+        ], $ctx);
+    }
+
+    /**
+     * Add a health record.
+     *
+     * Route:   POST /panel/horses/{id}/health
+     * Auth:    role:admin,manager + csrf
+     * Body:    { record_type, title, performed_at, next_due_at, vet_name, notes, cost_irt }
+     * Returns: JSON envelope { data: { id } } (201)
+     */
+    public function createHealth(Request $request, MiddlewareContext $ctx): Response
+    {
+        $id = $this->c->get('horse_health')->create((int) $request->attr('id'), $this->input($request), $ctx->actor());
+        return $this->ok($id, $ctx, 201);
+    }
+
+    /**
+     * Update a health record.
+     *
+     * Route:   PUT /panel/horses/health/{recordId}
+     * Auth:    role:admin,manager + csrf
+     * Returns: JSON envelope { data: { id } }
+     */
+    public function updateHealth(Request $request, MiddlewareContext $ctx): Response
+    {
+        $id = $this->c->get('horse_health')->update((int) $request->attr('recordId'), $this->input($request), $ctx->actor());
+        return $this->ok($id, $ctx);
+    }
+
+    /**
+     * Delete a health record.
+     *
+     * Route:   DELETE /panel/horses/health/{recordId}
+     * Auth:    role:admin,manager + csrf
+     * Returns: JSON envelope { data: null }
+     */
+    public function deleteHealth(Request $request, MiddlewareContext $ctx): Response
+    {
+        $this->c->get('horse_health')->delete((int) $request->attr('recordId'), $ctx->actor());
+        return $this->ok(null, $ctx);
+    }
+
+    /**
+     * Records due (next dose / check) within the next N days.
+     *
+     * Route:   GET /panel/horses/health/due?days=30
+     * Auth:    role:admin,manager
+     * Returns: JSON envelope { data: { rows, days } }
+     */
+    public function healthDue(Request $request, MiddlewareContext $ctx): Response
+    {
+        $days = (int) ($request->query('days', 30) ?: 30);
+        return $this->ok([
+            'rows' => $this->c->get('horse_health')->dueWithin($days),
+            'days' => $days,
+        ], $ctx);
     }
 }

@@ -7,6 +7,7 @@ declare(strict_types=1);
  * Purpose:
  *   HTTP layer for signups: staff list/view/confirm/reject/position/bulk, and
  *   the rider's own signup list (Blueprint §10.3; User Usage §7.15, §9.7).
+ *   JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -42,8 +43,7 @@ final class SignupController extends BaseController
             'search' => (string) $request->query('search', ''),
         ];
         $result = $this->c->get('signups')->list($filters, $ctx->actor(), $this->page($request), $this->perPage($request));
-        if ($request->isJson()) { return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]); }
-        return $this->view('panel/signups', ['rows' => $result['rows'], 'total' => $result['total'], 'filters' => $filters, 'csrf' => $ctx->csrf]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
     }
 
     /**
@@ -118,13 +118,12 @@ final class SignupController extends BaseController
      *
      * Route:   GET /panel/rider/signups
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function riderIndex(Request $request, MiddlewareContext $ctx): Response
     {
         $result = $this->c->get('signups')->list([], $ctx->actor(), $this->page($request), $this->perPage($request));
-        if ($request->isJson()) { return $this->ok($result, $ctx, 200, ['total' => $result['total']]); }
-        return $this->view('panel/rider-signups', ['rows' => $result['rows'], 'total' => $result['total'], 'csrf' => $ctx->csrf]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total']]);
     }
 
     /**

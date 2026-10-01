@@ -60,28 +60,64 @@ final class AdminController extends BaseController
         $perPage = $this->perPage($request);
         $offset = ($page - 1) * $perPage;
         $db = $this->c->get('logs_db');
-        $total = (int) $db->scalar('SELECT COUNT(*) FROM audit_logs WHERE ' . implode(' AND ', $where), $params);
-        $rows = $db->select('SELECT * FROM audit_logs WHERE ' . implode(' AND ', $where) . ' ORDER BY id DESC LIMIT :l OFFSET :o', $params + ['l' => $perPage, 'o' => $offset]);
-        if ($request->isJson()) {
-            return $this->ok(['rows' => $rows, 'total' => $total], $ctx, 200, ['total' => $total]);
+        $whereSql = implode(' AND ', $where);
+
+        /* CSV export honours exactly the same filters as the on-screen list. */
+        if ($request->query('format') === 'csv') {
+            $all = $db->select('SELECT * FROM audit_logs WHERE ' . $whereSql . ' ORDER BY id DESC LIMIT 20000', $params);
+            $is_array = is_array($all) ? $all : [];
+            /* audit_logs lives in the logs database, so actor names are resolved
+               separately from the main database. */
+            $names = [];
+            foreach ($this->c->get('db')->select('SELECT id, username, first_name, last_name FROM users') as $u) {
+                $names[(int) $u['id']] = trim((string) $u['first_name'] . ' ' . (string) $u['last_name']) !== ''
+                    ? (string) $u['first_name'] . ' ' . (string) $u['last_name']
+                    : (string) $u['username'];
+            }
+            $lines = "\xEF\xBB\xBF" . '"شناسه","کاربر","نقش","عملیات","نوع موجودیت","شناسه موجودیت","نتیجه","نشانی IP","زمان"' . "\n";
+            foreach ($is_array as $r) {
+                $actorId = (int) ($r['actor_id'] ?? 0);
+                $actor = $actorId > 0 ? ($names[$actorId] ?? ('#' . $actorId)) : 'سامانه';
+                $cells = [
+                    (string) ($r['id'] ?? ''),
+                    $actor,
+                    (string) ($r['actor_role'] ?? ''),
+                    (string) ($r['action'] ?? ''),
+                    (string) ($r['target_type'] ?? ''),
+                    (string) ($r['target_id'] ?? ''),
+                    (string) ($r['result'] ?? ''),
+                    (string) ($r['ip'] ?? ''),
+                    (string) ($r['created_at'] ?? ''),
+                ];
+                $lines .= implode(',', array_map(static fn ($v) => '"' . str_replace('"', '""', $v) . '"', $cells)) . "\n";
+            }
+            $filename = 'audit-log-' . gmdate('Ymd-His') . '.csv';
+            $path = BASE_PATH . '/cache/' . $filename;
+            @file_put_contents($path, $lines);
+            return Response::download($path, $filename);
         }
-        return $this->view('panel/audit', ['rows' => $rows, 'total' => $total, 'filters' => $filters, 'csrf' => $ctx->csrf]);
+
+        $total = (int) $db->scalar('SELECT COUNT(*) FROM audit_logs WHERE ' . $whereSql, $params);
+        $rows = $db->select('SELECT * FROM audit_logs WHERE ' . $whereSql . ' ORDER BY id DESC LIMIT :l OFFSET :o', $params + ['l' => $perPage, 'o' => $offset]);
+        $actions = $db->select("SELECT DISTINCT action FROM audit_logs WHERE action IS NOT NULL AND action <> '' ORDER BY action LIMIT 60");
+        return $this->ok([
+            'rows' => is_array($rows) ? $rows : [],
+            'total' => $total,
+            'filters' => $filters,
+            'actions' => is_array($actions) ? $actions : [],
+        ], $ctx, 200, ['total' => $total]);
     }
 
     /**
-     * Backups page.
+     * List backups.
      *
      * Route:   GET /panel/backups
      * Auth:    role:admin
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function backups(Request $request, MiddlewareContext $ctx): Response
     {
-        $list = $this->c->get('backup')->list();
-        if ($request->isJson()) {
-            return $this->ok($list, $ctx);
-        }
-        return $this->view('panel/backups', ['rows' => $list, 'csrf' => $ctx->csrf]);
+        return $this->ok($this->c->get('backup')->list(), $ctx);
     }
 
     /**
@@ -127,7 +163,7 @@ final class AdminController extends BaseController
     {
         $path = $this->c->get('backup')->path((string) $request->attr('name'));
         if (!is_file($path)) {
-            return Response::html('Not found', 404);
+            return $this->fail('NOT_FOUND', 'Backup not found', $ctx, 404);
         }
         return Response::download($path, basename($path));
     }
@@ -195,5 +231,23 @@ final class AdminController extends BaseController
     {
         $data = (string) $request->query('data', '');
         return $this->ok(['data' => $data], $ctx);
+    }
+
+    /**
+     * Run the scheduled jobs (deadline alerts, auto verification, backups).
+     *
+     * Route:   POST /panel/cron?key=...
+     * Auth:    guest + shared secret matching settings.scheduler.secret, so a
+     *          host cron job can trigger it without a browser session.
+     * Returns: JSON envelope { data: { deadline_alerts: {...}, ... } }
+     */
+    public function runCron(Request $request, MiddlewareContext $ctx): Response
+    {
+        $secret = (string) $this->c->get('settings')->get('scheduler.secret', '');
+        $provided = (string) ($request->query('key', '') ?: '');
+        if ($secret === '' || !hash_equals($secret, $provided)) {
+            return $this->fail('FORBIDDEN', 'کلید زمان‌بند نامعتبر است', $ctx, 403);
+        }
+        return $this->ok($this->c->get('scheduler')->runAll(), $ctx);
     }
 }

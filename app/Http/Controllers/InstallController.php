@@ -63,26 +63,6 @@ final class InstallController extends BaseController
     ];
 
     /**
-     * Render the installer page (or a locked message).
-     *
-     * Route:   GET /install
-     * Auth:    guest
-     * Returns: HTML installer
-     */
-    public function index(Request $request, MiddlewareContext $ctx): Response
-    {
-        $this->ensureDirectories();
-
-        if ($this->isInstalled()) {
-            return Response::html('<div style="font-family:Tahoma;text-align:center;padding:48px"><h2>سامانه قبلاً نصب شده است</h2><p><a href="/auth/login">ورود به پنل</a></p></div>');
-        }
-        return $this->view('auth/install', [
-            'requirements' => $this->checkRequirements(),
-            'csrf' => $this->c->get('guest_csrf'),
-        ], 'auth');
-    }
-
-    /**
      * Run the installer.
      *
      * Route:   POST /install/run
@@ -178,7 +158,7 @@ final class InstallController extends BaseController
      *
      * @return bool
      */
-    private function isInstalled(): bool
+    public function isInstalled(): bool
     {
         try {
             $value = $this->c->get('settings')->get('app.installed', false);
@@ -186,25 +166,5 @@ final class InstallController extends BaseController
         } catch (\Throwable) {
             return false;
         }
-    }
-
-    /**
-     * Check runtime requirements.
-     *
-     * @return array<int,array{label:string,ok:bool,detail:string}>
-     */
-    private function checkRequirements(): array
-    {
-        $checks = [];
-        $checks[] = ['label' => 'نسخه PHP (حداقل 8.1)', 'ok' => PHP_VERSION_ID >= 80100, 'detail' => PHP_VERSION];
-        foreach (['pdo_sqlite', 'mbstring', 'json', 'openssl', 'fileinfo', 'curl', 'zip'] as $ext) {
-            $checks[] = ['label' => 'افزونه ' . $ext, 'ok' => extension_loaded($ext), 'detail' => extension_loaded($ext) ? 'فعال' : 'غیرفعال'];
-        }
-        $checks[] = ['label' => 'افزونه GD یا Imagick', 'ok' => extension_loaded('gd') || extension_loaded('imagick'), 'detail' => extension_loaded('gd') ? 'GD' : (extension_loaded('imagick') ? 'Imagick' : 'هیچ‌کدام')];
-        foreach (self::REQUIRED_DIRS as $dir) {
-            $path = BASE_PATH . '/' . $dir;
-            $checks[] = ['label' => 'قابل نوشتن: ' . $dir, 'ok' => is_dir($path) && is_writable($path), 'detail' => is_dir($path) ? (is_writable($path) ? 'قابل نوشتن' : 'غیرقابل نوشتن') : 'وجود ندارد'];
-        }
-        return $checks;
     }
 }

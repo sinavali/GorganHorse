@@ -4,6 +4,7 @@ declare(strict_types=1);
 /**
  * File: tests/E2E/HttpRoutesAndControllersTest.php
  * Purpose: End-to-End HTTP Route and Controller testing via Kernel process().
+ *          The backend is a pure JSON API: every response is a JSON envelope.
  */
 
 if (!defined('BASE_PATH')) {
@@ -44,16 +45,29 @@ final class HttpRoutesAndControllersTest
 
         $kernel = Bootstrap::kernel($c);
 
+        // Helper: assert the response is a JSON envelope.
+        $assertEnvelope = function (App\Bootstrap\Response $res): array {
+            assert(str_contains((string) ($res->headers()['Content-Type'] ?? ''), 'application/json'));
+            $json = json_decode($res->body(), true);
+            assert(is_array($json));
+            assert(array_key_exists('ok', $json));
+            assert(array_key_exists('data', $json));
+            return $json;
+        };
+
         // 1. Guest Routes
         echo "  [1] Testing Guest Auth Routes...\n";
         $loginGet = self::makeRequest('GET', '/auth/login');
         $res = $kernel->process($loginGet);
         assert($res->status() === 200);
-        assert(str_contains($res->body(), 'ورود به پنل'));
+        $loginCfg = $assertEnvelope($res);
+        assert(isset($loginCfg['data']['allow_signup']));
+        assert(isset($loginCfg['data']['csrf']));
 
         $signupGet = self::makeRequest('GET', '/auth/signup');
         $res2 = $kernel->process($signupGet);
         assert($res2->status() === 200);
+        $assertEnvelope($res2);
 
         // Captcha issue
         $guestCsrf = $c->get('guest_csrf');
@@ -79,16 +93,7 @@ final class HttpRoutesAndControllersTest
         $sessRow = $db->selectOne('SELECT id FROM sessions WHERE user_id = 1 ORDER BY created_at DESC LIMIT 1');
         $sessId = $sessRow['id'] ?? '';
 
-        // Helper to create authenticated panel requests
-        $panelReq = function (string $method, string $path, array $data = []) use ($sessId, $kernel) {
-            $req = self::makeRequest($method, $path, $data, [
-                'accept' => 'text/html,application/xhtml+xml,application/xml',
-                'user-agent' => 'PHPUnit/Test',
-            ], ['session_id' => $sessId]);
-            return $kernel->process($req);
-        };
-
-        // Helper to create JSON panel API requests
+        // Helper to create authenticated JSON API requests
         $apiReq = function (string $method, string $path, array $data = []) use ($sessId, $kernel) {
             $req = self::makeRequest($method, $path, $data, [
                 'accept' => 'application/json',
@@ -97,59 +102,83 @@ final class HttpRoutesAndControllersTest
             return $kernel->process($req);
         };
 
-        // 3. Panel Dashboard & Navigation Pages
-        echo "  [3] Testing Panel Dashboard & List Pages...\n";
-        $resDash = $panelReq('GET', '/panel');
+        // 3. Panel JSON endpoints (former page routes now return envelopes)
+        echo "  [3] Testing Panel JSON Endpoints...\n";
+        $resDash = $apiReq('GET', '/panel');
         assert($resDash->status() === 200);
+        $dashJson = json_decode($resDash->body(), true);
+        assert(isset($dashJson['data']['role']) && isset($dashJson['data']['kpi']));
 
-        $resUsers = $panelReq('GET', '/panel/users');
+        $resUsers = $apiReq('GET', '/panel/users');
         assert($resUsers->status() === 200);
+        assert(isset(json_decode($resUsers->body(), true)['data']['rows']));
 
-        $resClubs = $panelReq('GET', '/panel/clubs');
+        $resClubs = $apiReq('GET', '/panel/clubs');
         assert($resClubs->status() === 200);
 
-        $resHorses = $panelReq('GET', '/panel/horses');
+        $resHorses = $apiReq('GET', '/panel/horses');
         assert($resHorses->status() === 200);
 
-        $resComps = $panelReq('GET', '/panel/competitions');
+        $resComps = $apiReq('GET', '/panel/competitions');
         assert($resComps->status() === 200);
 
-        $resRades = $panelReq('GET', '/panel/rades');
+        $resRades = $apiReq('GET', '/panel/rades');
         assert($resRades->status() === 200);
 
-        $resSignups = $panelReq('GET', '/panel/signups');
+        $resSignups = $apiReq('GET', '/panel/signups');
         assert($resSignups->status() === 200);
 
-        $resPayments = $panelReq('GET', '/panel/payments');
+        $resPayments = $apiReq('GET', '/panel/payments');
         assert($resPayments->status() === 200);
 
-        $resOrders = $panelReq('GET', '/panel/payment-orders');
+        $resOrders = $apiReq('GET', '/panel/payment-orders');
         assert($resOrders->status() === 200);
 
-        $resReports = $panelReq('GET', '/panel/reports');
+        $resReports = $apiReq('GET', '/panel/reports');
         assert($resReports->status() === 200);
 
-        $resNotifs = $panelReq('GET', '/panel/notifications');
+        $resNotifs = $apiReq('GET', '/panel/notifications');
         assert($resNotifs->status() === 200);
 
-        $resMsgs = $panelReq('GET', '/panel/messages');
+        $resMsgs = $apiReq('GET', '/panel/messages');
         assert($resMsgs->status() === 200);
 
-        $resSettings = $panelReq('GET', '/panel/settings');
+        $resSettings = $apiReq('GET', '/panel/settings');
         assert($resSettings->status() === 200);
 
-        $resAudit = $panelReq('GET', '/panel/audit');
+        $resAudit = $apiReq('GET', '/panel/audit');
         assert($resAudit->status() === 200);
 
-        $resSmsLog = $panelReq('GET', '/panel/sms-log');
+        $resSmsLog = $apiReq('GET', '/panel/sms/log');
         assert($resSmsLog->status() === 200);
 
-        $resBackups = $panelReq('GET', '/panel/backups');
+        $resBackups = $apiReq('GET', '/panel/backups');
         assert($resBackups->status() === 200);
 
-        // 4. Panel APIs & Reports Execution
+        // Route-parameter endpoints. The Kernel calls every controller as
+        // method($request, $ctx) and exposes {params} as request attributes,
+        // so a controller declaring extra positional arguments would 500.
+        $resLookups = $apiReq('GET', '/panel/lookups');
+        assert($resLookups->status() === 200);
+        $resLookupColors = $apiReq('GET', '/panel/lookups/colors');
+        assert($resLookupColors->status() === 200);
+        assert(is_array(json_decode($resLookupColors->body(), true)['data']));
+
+        $resCultures = $apiReq('GET', '/panel/cultures');
+        assert($resCultures->status() === 200);
+        $culturesJson = json_decode($resCultures->body(), true)['data'];
+        assert(isset($culturesJson['active']) && !empty($culturesJson['cultures']));
+
+        // Installer pre-flight checklist (guest route behind the /install page).
+        $resReq = $apiReq('GET', '/panel/requirements');
+        assert($resReq->status() === 200);
+        $reqJson = json_decode($resReq->body(), true)['data'];
+        assert(array_key_exists('installed', $reqJson));
+        assert(!empty($reqJson['requirements']));
+
+        // 4. Panel Reports API
         echo "  [4] Testing Panel Reports API...\n";
-        $repPost = $apiReq('POST', '/panel/reports/run', [
+        $repPost = $apiReq('POST', '/panel/reports/data', [
             'report' => 'signups',
             'page' => 1,
             'per_page' => 10,
@@ -158,17 +187,13 @@ final class HttpRoutesAndControllersTest
         $repJson = json_decode($repPost->body(), true);
         assert(isset($repJson['data']['rows']));
 
-        // 5. Printable Entity Views
-        echo "  [5] Testing Print Views...\n";
-        $compRow = $db->selectOne('SELECT id FROM competitions LIMIT 1');
-        if ($compRow) {
-            $printComp = $panelReq('GET', '/print/competition/' . $compRow['id']);
-            assert($printComp->status() === 200);
-            $printSheet = $panelReq('GET', '/print/signup-sheet/' . $compRow['id']);
-            assert($printSheet->status() === 200);
-            $printStandings = $panelReq('GET', '/print/standings/' . $compRow['id']);
-            assert($printStandings->status() === 200);
-        }
+        // 5. JSON error envelope (unknown route → 404 JSON)
+        echo "  [5] Testing JSON Error Envelope...\n";
+        $nf = $apiReq('GET', '/panel/definitely-not-a-route');
+        assert($nf->status() === 404);
+        $nfJson = json_decode($nf->body(), true);
+        assert($nfJson['ok'] === false);
+        assert(!empty($nfJson['errors']));
 
         echo "  E2E HTTP Routes & Controllers Tests Passed!\n";
     }

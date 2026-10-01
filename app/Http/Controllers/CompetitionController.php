@@ -6,8 +6,9 @@ declare(strict_types=1);
  *
  * Purpose:
  *   HTTP layer for competitions: CRUD, pause/resume, cancel, clone, the
- *   competition-rades tab, barrage toggling, print views, and the rider-facing
- *   competition browse + signup flow (Blueprint §10.3; User Usage §7.12–7.14, §9.4–9.6).
+ *   competition-rades tab, barrage toggling, and the rider-facing competition
+ *   browse + signup flow (Blueprint §10.3; User Usage §7.12–7.14, §9.4–9.6).
+ *   JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -41,8 +42,7 @@ final class CompetitionController extends BaseController
             'to' => (string) $request->query('to', ''),
         ];
         $result = $this->c->get('competitions')->list($filters, $ctx->actor(), $this->page($request), $this->perPage($request));
-        if ($request->isJson()) { return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]); }
-        return $this->view('panel/competitions', ['rows' => $result['rows'], 'total' => $result['total'], 'filters' => $filters, 'csrf' => $ctx->csrf]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
     }
 
     /**
@@ -62,19 +62,11 @@ final class CompetitionController extends BaseController
      *
      * Route:   GET /panel/competitions/{id}
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function show(Request $request, MiddlewareContext $ctx): Response
     {
-        $competition = $this->c->get('competitions')->get((int) $request->attr('id'), $ctx->actor());
-        if ($request->isJson()) { return $this->ok($competition, $ctx); }
-        return $this->view('panel/competition-edit', [
-            'record' => $competition,
-            'rades' => $competition['rades'] ?? [],
-            'all_rades' => $this->c->get('rades')->list(['active' => 1]),
-            'payments' => $this->c->get('payments')->listTemplates(['active' => 1]),
-            'csrf' => $ctx->csrf,
-        ]);
+        return $this->ok($this->c->get('competitions')->get((int) $request->attr('id'), $ctx->actor()), $ctx);
     }
 
     /**
@@ -204,34 +196,6 @@ final class CompetitionController extends BaseController
     }
 
     /**
-     * Print a competition paper.
-     *
-     * Route:   GET /panel/competitions/{id}/print
-     * Auth:    auth
-     * Returns: HTML print page
-     */
-    public function print(Request $request, MiddlewareContext $ctx): Response
-    {
-        $competition = $this->c->get('competitions')->get((int) $request->attr('id'), $ctx->actor());
-        return $this->view('print/competition', ['record' => $competition, 'rades' => $competition['rades'] ?? [], 'title' => $competition['title']], 'print');
-    }
-
-    /**
-     * Print a competition signup sheet.
-     *
-     * Route:   GET /panel/competitions/{id}/signup-sheet/print
-     * Auth:    auth
-     * Returns: HTML print page
-     */
-    public function printSignupSheet(Request $request, MiddlewareContext $ctx): Response
-    {
-        $id = (int) $request->attr('id');
-        $competition = $this->c->get('competitions')->get($id, $ctx->actor());
-        $signups = $this->c->get('signups')->list(['competition_id' => $id], ['id' => 0, 'role' => 'admin'], 1, 5000)['rows'];
-        return $this->view('print/signup-sheet', ['competition' => $competition, 'rows' => $signups, 'title' => 'لیست ثبت‌نام - ' . $competition['title']], 'print');
-    }
-
-    /**
      * Bulk publish/cancel.
      *
      * Route:   POST /panel/competitions/bulk
@@ -262,38 +226,33 @@ final class CompetitionController extends BaseController
      *
      * Route:   GET /panel/rider/competitions
      * Auth:    auth (any role; typically rider)
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function riderIndex(Request $request, MiddlewareContext $ctx): Response
     {
         $filters = ['search' => (string) $request->query('search', '')];
         $result = $this->c->get('competitions')->list($filters, ['id' => 0, 'role' => 'guest'], $this->page($request), $this->perPage($request));
-        if ($request->isJson()) { return $this->ok($result, $ctx, 200, ['total' => $result['total']]); }
-        return $this->view('panel/rider-competitions', ['rows' => $result['rows'], 'csrf' => $ctx->csrf, 'pending' => $ctx->pendingVerification]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total']]);
     }
 
     /**
-     * Rider competition detail with rades.
+     * Rider competition detail with signup context (own horses, active clubs).
      *
      * Route:   GET /panel/rider/competitions/{id}
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope { data: { competition, horses, clubs } }
      */
     public function riderShow(Request $request, MiddlewareContext $ctx): Response
     {
         $id = (int) $request->attr('id');
         $competition = $this->c->get('competitions')->get($id, ['id' => 0, 'role' => 'guest']);
-        if ($request->isJson()) { return $this->ok($competition, $ctx); }
         $horses = $this->c->get('horses')->list([], $ctx->actor(), 1, 250)['rows'];
         $clubs = $this->c->get('clubs')->list(['status' => 'active'], $ctx->actor(), 1, 250)['rows'];
-        return $this->view('panel/rider-signup', [
+        return $this->ok([
             'competition' => $competition,
-            'rades' => $competition['rades'] ?? [],
             'horses' => $horses,
             'clubs' => $clubs,
-            'csrf' => $ctx->csrf,
-            'pending' => $ctx->pendingVerification,
-        ]);
+        ], $ctx);
     }
 
     /**
@@ -330,5 +289,66 @@ final class CompetitionController extends BaseController
             'amount_irt' => 0,
             'redirect' => '/panel/rider/signups',
         ], $ctx, 201);
+    }
+
+    /**
+     * Calendar feed of competitions for a month window.
+     *
+     * Powers the federation calendar view: every competition that overlaps the
+     * requested window, with the dates needed to place it on a grid without a
+     * second round-trip.
+     *
+     * Route:   GET /panel/competitions/calendar
+     * Query:   from=YYYY-MM-DD, to=YYYY-MM-DD, status, venue_club_id
+     * Auth:    auth
+     * Returns: JSON envelope { data: { from, to, items: [...] } }
+     */
+    public function calendar(Request $request, MiddlewareContext $ctx): Response
+    {
+        $db = $this->c->get('db');
+        $from = (string) ($request->query('from', '') ?: gmdate('Y-m-01'));
+        $to = (string) ($request->query('to', '') ?: gmdate('Y-m-t'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) { $from = gmdate('Y-m-01'); }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) { $to = gmdate('Y-m-t'); }
+        if ($to < $from) { [$from, $to] = [$to, $from]; }
+
+        $where = ['date(c.start_at) <= :to', 'date(COALESCE(c.end_at, c.start_at)) >= :from'];
+        $params = ['from' => $from, 'to' => $to];
+        $status = (string) ($request->query('status', '') ?: '');
+        if ($status !== '' && $status !== 'all') {
+            $where[] = 'c.status = :status';
+            $params['status'] = $status;
+        }
+        $venue = (int) ($request->query('venue_club_id', 0) ?: 0);
+        if ($venue > 0) {
+            $where[] = 'c.venue_club_id = :venue';
+            $params['venue'] = $venue;
+        }
+
+        $rows = $db->select(
+            'SELECT c.id, c.title, c.slug, c.status, c.city, c.start_at, c.end_at,
+                    c.start_registration_at, c.end_registration_at, c.registration_paused,
+                    c.results_status, cl.name AS venue_name,
+                    (SELECT COUNT(*) FROM signups s WHERE s.competition_id = c.id) AS signup_count,
+                    (SELECT COALESCE(SUM(cr.capacity), 0) FROM competition_rades cr WHERE cr.competition_id = c.id) AS total_capacity
+             FROM competitions c
+             LEFT JOIN clubs cl ON cl.id = c.venue_club_id
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY c.start_at ASC',
+            $params
+        );
+        $items = is_array($rows) ? $rows : [];
+        foreach ($items as &$it) {
+            $it['signup_count'] = (int) $it['signup_count'];
+            $it['total_capacity'] = (int) $it['total_capacity'];
+        }
+        unset($it);
+
+        return $this->ok([
+            'from' => $from,
+            'to' => $to,
+            'items' => $items,
+            'today' => gmdate('Y-m-d'),
+        ], $ctx);
     }
 }

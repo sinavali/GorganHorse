@@ -222,6 +222,16 @@ final class CompetitionService
         foreach (['title', 'description', 'rules', 'city', 'end_at'] as $field) {
             if (array_key_exists($field, $input)) { $data[$field] = $input[$field]; }
         }
+        /* Mandatory announcement shown to riders before they may sign up. */
+        if (array_key_exists('announcement', $input)) { $data['announcement'] = $input['announcement']; }
+        if (array_key_exists('announcement_required', $input)) {
+            $data['announcement_required'] = ((int) $input['announcement_required'] === 1 && (string) ($data['announcement'] ?? $this->db->scalar(
+                'SELECT announcement FROM competitions WHERE id = :i',
+                ['i' => $id]
+            )) !== '') ? 1 : 0;
+        } elseif (array_key_exists('announcement', $input) && (string) $input['announcement'] === '') {
+            $data['announcement_required'] = 0;
+        }
         foreach (['start_registration_at', 'end_registration_at', 'start_at'] as $field) {
             if (!empty($input[$field])) { $data[$field] = $input[$field]; }
         }

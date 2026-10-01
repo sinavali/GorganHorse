@@ -269,6 +269,30 @@ CREATE TABLE IF NOT EXISTS horse_images (
 CREATE INDEX IF NOT EXISTS idx_horse_images_horse ON horse_images(horse_id);
 
 -- -----------------------------------------------------------------------------
+-- horse_health_records
+-- Purpose: veterinary / vaccination / treatment history per horse so managers
+--          can prove a horse was fit before a competition.
+-- Relations: belongs to horses; optionally recorded by a staff user.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS horse_health_records (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    horse_id     INTEGER NOT NULL,                          -- FK horses.id
+    record_type  TEXT NOT NULL DEFAULT 'vaccination',        -- vaccination|checkup|treatment|injury|fitness
+    title        TEXT NOT NULL,                             -- short description
+    performed_at TEXT,                                      -- UTC date of the procedure
+    next_due_at  TEXT,                                      -- UTC date the next dose/check is due
+    vet_name     TEXT,                                      -- veterinarian / clinic
+    notes        TEXT,                                      -- free text
+    cost_irt     INTEGER NOT NULL DEFAULT 0,                -- cost in IRT
+    performed_by INTEGER,                                   -- FK users.id (staff)
+    created_at   TEXT NOT NULL,                             -- UTC creation timestamp
+    updated_at   TEXT NOT NULL,                             -- UTC last update timestamp
+    FOREIGN KEY (horse_id) REFERENCES horses(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_horse_health_horse ON horse_health_records(horse_id);
+CREATE INDEX IF NOT EXISTS idx_horse_health_due ON horse_health_records(next_due_at);
+
+-- -----------------------------------------------------------------------------
 -- horse_transfers
 -- Purpose: ownership transfer requests between riders.
 -- Relations: belongs to horses; from_user_id (current owner), to_user_id (initiator).
@@ -366,6 +390,8 @@ CREATE TABLE IF NOT EXISTS competitions (
     start_at              TEXT NOT NULL,                    -- UTC competition starts
     end_at                TEXT,                             -- UTC competition ends
     registration_paused   INTEGER NOT NULL DEFAULT 0,       -- 1 = registration paused
+    announcement          TEXT,                             -- mandatory announcement shown before signup
+    announcement_required INTEGER NOT NULL DEFAULT 0,       -- 1 = rider must tick "read" before signup
     status                TEXT NOT NULL DEFAULT 'draft',    -- draft|open|closed|running|finished|cancelled
     results_status        TEXT NOT NULL DEFAULT 'draft',    -- draft | confirmed | published
     results_published_at  TEXT,                             -- UTC of publish

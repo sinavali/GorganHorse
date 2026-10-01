@@ -93,7 +93,7 @@ abstract class BaseReport implements ReportInterface
      * Build a WHERE clause from whitelisted filters. Scope filters (flagged
      * _scope=true) skip the whitelist check and use their own 'sql' fragment.
      *
-     * Supported operators: eq, ne, gt, lt, in, between, contains, raw.
+     * Supported operators: eq, ne, gt, gte, lt, lte, in, between, contains, raw.
      * The 'raw' operator substitutes :__val__, :__v0__, :__v1__ placeholders
      * with a single generated named parameter (the same value reused).
      *
@@ -129,6 +129,14 @@ abstract class BaseReport implements ReportInterface
                     break;
                 case 'gt':
                     $clauses[] = "$sqlCol > :$p";
+                    $params[$p] = $value;
+                    break;
+                case 'gte':
+                    $clauses[] = "$sqlCol >= :$p";
+                    $params[$p] = $value;
+                    break;
+                case 'lte':
+                    $clauses[] = "$sqlCol <= :$p";
                     $params[$p] = $value;
                     break;
                 case 'lt':
@@ -287,6 +295,11 @@ final class SignupsReport extends BaseReport
             ['key' => 'club_id', 'label' => 'باشگاه', 'type' => 'int', 'sql' => 's.affiliation_club_id', 'operators' => ['eq']],
             ['key' => 'status', 'label' => 'وضعیت', 'type' => 'enum', 'sql' => 's.status', 'operators' => ['in', 'eq'], 'options' => ['pending_payment', 'paid', 'confirmed', 'rejected', 'cancelled', 'withdrawn']],
             ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
+            ['key' => 'horse', 'label' => 'اسب', 'type' => 'string', 'sql' => 'h.name', 'operators' => ['contains']],
+            ['key' => 'city', 'label' => 'شهر', 'type' => 'string', 'sql' => 'c.city', 'operators' => ['contains', 'eq']],
+            ['key' => 'amount', 'label' => 'مبلغ', 'type' => 'int', 'sql' => 's.payment_amount_irt_snapshot', 'operators' => ['between', 'gte', 'lte', 'eq']],
+            ['key' => 'winner', 'label' => 'برنده', 'type' => 'bool', 'sql' => 's.is_winner', 'operators' => ['eq']],
+            ['key' => 'position', 'label' => 'مقام', 'type' => 'int', 'sql' => 's.position', 'operators' => ['eq', 'lte']],
             ['key' => 'created_at', 'label' => 'تاریخ', 'type' => 'datetime', 'sql' => 's.created_at', 'operators' => ['between', 'gt', 'lt']],
         ];
     }
@@ -379,6 +392,10 @@ final class RevenueReport extends BaseReport
         return [
             ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'int', 'sql' => 'po.competition_id', 'operators' => ['eq']],
             ['key' => 'status', 'label' => 'وضعیت', 'type' => 'enum', 'sql' => 'po.status', 'operators' => ['in', 'eq'], 'options' => ['pending', 'paid', 'failed', 'pending_refund', 'refunded']],
+            ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
+            ['key' => 'city', 'label' => 'شهر', 'type' => 'string', 'sql' => 'c.city', 'operators' => ['contains']],
+            ['key' => 'amount', 'label' => 'مبلغ', 'type' => 'int', 'sql' => 'po.amount_irt', 'operators' => ['between', 'gte', 'lte', 'eq']],
+            ['key' => 'created_at', 'label' => 'تاریخ ایجاد', 'type' => 'datetime', 'sql' => 'po.created_at', 'operators' => ['between', 'gt', 'lt']],
             ['key' => 'verified_at', 'label' => 'زمان تایید', 'type' => 'datetime', 'sql' => 'po.verified_at', 'operators' => ['between', 'gt', 'lt']],
         ];
     }
@@ -444,6 +461,11 @@ final class ResultsReport extends BaseReport
             ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'int', 'sql' => 's.competition_id', 'operators' => ['eq']],
             ['key' => 'rade_id', 'label' => 'رده', 'type' => 'int', 'sql' => 's.rade_id', 'operators' => ['eq']],
             ['key' => 'winner', 'label' => 'برنده', 'type' => 'bool', 'sql' => 's.is_winner', 'operators' => ['eq']],
+            ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
+            ['key' => 'horse', 'label' => 'اسب', 'type' => 'string', 'sql' => 'h.name', 'operators' => ['contains']],
+            ['key' => 'city', 'label' => 'شهر', 'type' => 'string', 'sql' => 'c.city', 'operators' => ['contains']],
+            ['key' => 'position', 'label' => 'مقام', 'type' => 'int', 'sql' => 's.position', 'operators' => ['eq', 'lte']],
+            ['key' => 'created_at', 'label' => 'تاریخ', 'type' => 'datetime', 'sql' => 's.created_at', 'operators' => ['between', 'gt', 'lt']],
         ];
     }
     public function defaultColumns(): array { return ['rider', 'horse', 'competition', 'rade', 'position', 'is_winner']; }
@@ -493,7 +515,12 @@ final class HorsesReport extends BaseReport
     {
         return [
             ['key' => 'status', 'label' => 'وضعیت', 'type' => 'enum', 'sql' => 'h.status', 'operators' => ['in', 'eq'], 'options' => ['active', 'sold_to_non_rider', 'soft_deleted']],
+            ['key' => 'gender', 'label' => 'جنسیت', 'type' => 'enum', 'sql' => 'h.gender', 'operators' => ['in', 'eq'], 'options' => ['نریان', 'مادیان', 'اخته']],
+            ['key' => 'race', 'label' => 'نژاد', 'type' => 'string', 'sql' => 'h.race', 'operators' => ['contains', 'eq']],
+            ['key' => 'color', 'label' => 'رنگ', 'type' => 'string', 'sql' => 'h.color', 'operators' => ['contains', 'eq']],
+            ['key' => 'name', 'label' => 'نام', 'type' => 'string', 'sql' => 'h.name', 'operators' => ['contains']],
             ['key' => 'owner', 'label' => 'مالک', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
+            ['key' => 'created_at', 'label' => 'تاریخ ثبت', 'type' => 'datetime', 'sql' => 'h.created_at', 'operators' => ['between', 'gt', 'lt']],
         ];
     }
     public function defaultColumns(): array { return ['name', 'owner', 'status', 'gender', 'race']; }
@@ -542,7 +569,11 @@ final class RidersReport extends BaseReport
     {
         return [
             ['key' => 'verification_status', 'label' => 'تایید', 'type' => 'enum', 'sql' => 'u.verification_status', 'operators' => ['in', 'eq'], 'options' => ['pending', 'verified', 'rejected']],
+            ['key' => 'disable_state', 'label' => 'وضعیت حساب', 'type' => 'enum', 'sql' => 'u.disable_state', 'operators' => ['in', 'eq'], 'options' => ['none', 'limited', 'full']],
             ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
+            ['key' => 'phone', 'label' => 'موبایل', 'type' => 'string', 'sql' => 'u.phone', 'operators' => ['contains']],
+            ['key' => 'city', 'label' => 'شهر', 'type' => 'string', 'sql' => 'rp.city', 'operators' => ['contains']],
+            ['key' => 'created_at', 'label' => 'تاریخ عضویت', 'type' => 'datetime', 'sql' => 'u.created_at', 'operators' => ['between', 'gt', 'lt']],
         ];
     }
     public function defaultColumns(): array { return ['rider', 'phone', 'verification_status', 'wins']; }
@@ -595,7 +626,12 @@ final class ClubsReport extends BaseReport
     }
     public function filters(): array
     {
-        return [['key' => 'name', 'label' => 'نام', 'type' => 'string', 'sql' => 'cl.name', 'operators' => ['contains']]];
+        return [
+            ['key' => 'name', 'label' => 'نام', 'type' => 'string', 'sql' => 'cl.name', 'operators' => ['contains']],
+            ['key' => 'city', 'label' => 'شهر', 'type' => 'string', 'sql' => 'cl.city', 'operators' => ['contains', 'eq']],
+            ['key' => 'is_active', 'label' => 'فعال', 'type' => 'bool', 'sql' => 'cl.is_active', 'operators' => ['eq']],
+            ['key' => 'created_at', 'label' => 'تاریخ عضویت', 'type' => 'datetime', 'sql' => 'cl.created_at', 'operators' => ['between', 'gt', 'lt']],
+        ];
     }
     public function defaultColumns(): array { return ['name', 'city', 'riders', 'signups', 'revenue']; }
     public function defaultSort(): string { return 'cl.created_at'; }
@@ -642,7 +678,15 @@ final class PaymentsReport extends BaseReport
             ['key' => 'created_at', 'label' => 'تاریخ', 'type' => 'datetime', 'exportable' => true],
         ];
     }
-    public function filters(): array { return [['key' => 'name', 'label' => 'نام', 'type' => 'string', 'sql' => 'p.name', 'operators' => ['contains']]]; }
+    public function filters(): array
+    {
+        return [
+            ['key' => 'name', 'label' => 'نام', 'type' => 'string', 'sql' => 'p.name', 'operators' => ['contains']],
+            ['key' => 'amount', 'label' => 'مبلغ', 'type' => 'int', 'sql' => 'p.amount_irt', 'operators' => ['between', 'gte', 'lte', 'eq']],
+            ['key' => 'is_active', 'label' => 'فعال', 'type' => 'bool', 'sql' => 'p.is_active', 'operators' => ['eq']],
+            ['key' => 'created_at', 'label' => 'تاریخ', 'type' => 'datetime', 'sql' => 'p.created_at', 'operators' => ['between', 'gt', 'lt']],
+        ];
+    }
     public function defaultColumns(): array { return ['name', 'amount', 'is_active']; }
     public function defaultSort(): string { return 'p.created_at'; }
     public function project(array $row, Database $db): array
@@ -682,6 +726,9 @@ final class BansReport extends BaseReport
         return [
             ['key' => 'scope', 'label' => 'دامنه', 'type' => 'enum', 'sql' => 'b.scope', 'operators' => ['in', 'eq'], 'options' => ['global', 'competition', 'rade']],
             ['key' => 'target_type', 'label' => 'نوع', 'type' => 'enum', 'sql' => 'b.target_type', 'operators' => ['in', 'eq'], 'options' => ['rider', 'horse']],
+            ['key' => 'reason', 'label' => 'دلیل', 'type' => 'string', 'sql' => 'b.reason', 'operators' => ['contains']],
+            ['key' => 'expires_at', 'label' => 'انقضا', 'type' => 'datetime', 'sql' => 'b.expires_at', 'operators' => ['between', 'gt', 'lt']],
+            ['key' => 'created_at', 'label' => 'تاریخ', 'type' => 'datetime', 'sql' => 'b.created_at', 'operators' => ['between', 'gt', 'lt']],
         ];
     }
     public function defaultColumns(): array { return ['target', 'target_type', 'scope', 'created_at']; }

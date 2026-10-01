@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * Purpose:
  *   HTTP layer for the notification centre and broadcast messages
- *   (Blueprint §18; User Usage §14).
+ *   (Blueprint §18; User Usage §14). JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -28,18 +28,16 @@ final class NotificationController extends BaseController
      *
      * Route:   GET /panel/notifications
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope { data: { rows, unread } }
      */
     public function index(Request $request, MiddlewareContext $ctx): Response
     {
         $svc = $this->c->get('notifications');
         $rows = $svc->list((int) $ctx->user['id'], false, 100);
-        if ($request->isJson()) { return $this->ok($rows, $ctx); }
-        return $this->view('panel/notifications', [
+        return $this->ok([
             'rows' => $rows,
             'unread' => $svc->unreadCount((int) $ctx->user['id']),
-            'csrf' => $ctx->csrf,
-        ]);
+        ], $ctx);
     }
 
     /**
@@ -73,15 +71,14 @@ final class NotificationController extends BaseController
      *
      * Route:   GET /panel/messages
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope { data: { rows, is_staff } }
      */
     public function messages(Request $request, MiddlewareContext $ctx): Response
     {
         $svc = $this->c->get('notifications');
         $isStaff = in_array($ctx->user['role'], ['admin', 'manager'], true);
         $rows = $isStaff ? $svc->listMessages() : $svc->inbox((int) $ctx->user['id']);
-        if ($request->isJson()) { return $this->ok($rows, $ctx); }
-        return $this->view('panel/messages', ['rows' => $rows, 'is_staff' => $isStaff, 'csrf' => $ctx->csrf]);
+        return $this->ok(['rows' => $rows, 'is_staff' => $isStaff], $ctx);
     }
 
     /**
@@ -104,14 +101,13 @@ final class NotificationController extends BaseController
      *
      * Route:   GET /panel/messages/{id}
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function showMessage(Request $request, MiddlewareContext $ctx): Response
     {
         $message = $this->c->get('notifications')->getMessage((int) $request->attr('id'));
         if ($message === null) { return $this->fail('NOT_FOUND', 'Not found', $ctx, 404); }
-        if ($request->isJson()) { return $this->ok($message, $ctx); }
-        return $this->view('panel/message', ['record' => $message, 'csrf' => $ctx->csrf]);
+        return $this->ok($message, $ctx);
     }
 
     /**

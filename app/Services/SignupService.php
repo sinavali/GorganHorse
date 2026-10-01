@@ -505,7 +505,8 @@ final class SignupService
         $offset = ($page - 1) * $perPage;
         $rows = $this->db->select(
             "SELECT s.*, r.name AS rade_name, c.title AS competition_title, h.name AS horse_name,
-                    (u.first_name || ' ' || u.last_name) AS rider_name, cl.name AS club_name
+                    (u.first_name || ' ' || u.last_name) AS rider_name, cl.name AS club_name,
+                    (SELECT po.id FROM payment_orders po WHERE po.uuid = s.order_uuid) AS order_id
              FROM signups s
              JOIN rades r ON r.id = s.rade_id
              JOIN competitions c ON c.id = s.competition_id
@@ -531,7 +532,8 @@ final class SignupService
     {
         $signup = $this->db->selectOne(
             "SELECT s.*, r.name AS rade_name, c.title AS competition_title, h.name AS horse_name,
-                    (u.first_name || ' ' || u.last_name) AS rider_name, cl.name AS club_name
+                    (u.first_name || ' ' || u.last_name) AS rider_name, cl.name AS club_name,
+                    (SELECT po.id FROM payment_orders po WHERE po.uuid = s.order_uuid) AS order_id
              FROM signups s
              JOIN rades r ON r.id = s.rade_id
              JOIN competitions c ON c.id = s.competition_id

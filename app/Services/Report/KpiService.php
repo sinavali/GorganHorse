@@ -66,9 +66,89 @@ final class KpiService
             'revenue_over_time' => $this->timeSeries('revenue', 30),
             'rade_popularity' => $this->radePopularity(90),
             'recent_changelog' => $this->recentChangelog(),
+            'attention' => $this->attention((string) ($user['role'] ?? 'admin')),
             'is_admin' => ($user['role'] ?? '') === 'admin',
         ];
         return $data;
+    }
+
+    /**
+     * "What needs my attention" feed for the dashboard.
+     *
+     * Groups the operational queues a staff member must clear today so the
+     * dashboard does not just show counters but actionable, linkable lists.
+     *
+     * @param string $role Viewer role.
+     * @return array<int,array{key:string,label:string,count:int,tone:string,path:string,icon:string}>
+     */
+    public function attention(string $role): array
+    {
+        if ($role === 'rider' || $role === 'club') {
+            return [];
+        }
+        $soon = utc_iso(time() + 172800); // 48 hours
+        $out = [];
+        $add = static function (string $key, string $label, int $count, string $tone, string $path, string $icon) use (&$out): void {
+            if ($count > 0) {
+                $out[] = ['key' => $key, 'label' => $label, 'count' => $count, 'tone' => $tone, 'path' => $path, 'icon' => $icon];
+            }
+        };
+
+        $add('verify', 'سوارکاران در انتظار تأیید',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM users WHERE role='rider' AND verification_status='pending'"),
+            'b-warn', '/users?status=pending', 'i-user');
+        $add('confirm', 'ثبت‌نام‌های پرداخت‌شده در انتظار تأیید',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM signups WHERE status='paid'"),
+            'b-info', '/signups?status=paid', 'i-list');
+        $add('refund', 'درخواست‌های استرداد',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM payment_orders WHERE status='pending_refund'"),
+            'b-bad', '/payment-orders?status=pending_refund', 'i-wallet');
+        $add('deadline', 'مسابقاتی که تا ۴۸ ساعت دیگر ثبت‌نامشان بسته می‌شود',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM competitions WHERE status='open' AND end_registration_at BETWEEN :n AND :s",
+                ['n' => now_utc(), 's' => $soon]),
+            'b-warn', '/competitions?status=open', 'i-clock');
+        $add('draft', 'مسابقات در وضعیت پیش‌نویس',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM competitions WHERE status='draft'"),
+            'b-mut', '/competitions?status=draft', 'i-file');
+        $add('unverified_horse', 'اسبان بدون ریزتراشه',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM horses WHERE status='active' AND (microchip_number IS NULL OR microchip_number='')"),
+            'b-mut', '/horses', 'i-horse');
+        $add('unpaid', 'پرداخت‌های ناموفق',
+            (int) $this->db->scalar("SELECT COUNT(*) FROM payment_orders WHERE status='failed'"),
+            'b-bad', '/payment-orders?status=failed', 'i-info');
+        return $out;
+    }
+
+    /**
+     * Cumulative rider ranking across all published results.
+     *
+     * Aggregates confirmed positions and wins per rider so the federation can
+     * publish an overall standings table (Blueprint §9.4).
+     *
+     * @param int $limit Max rows.
+     * @return array<int,array>
+     */
+    public function riderRanking(int $limit = 100): array
+    {
+        $limit = max(1, min(1000, $limit));
+        return $this->db->select(
+            "SELECT s.rider_user_id AS rider_user_id,
+                    u.first_name || ' ' || u.last_name AS rider_name,
+                    u.username,
+                    COUNT(*) AS entries,
+                    SUM(CASE WHEN s.is_winner = 1 THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN s.position = 1 THEN 1 ELSE 0 END) AS firsts,
+                    SUM(CASE WHEN s.position = 2 THEN 1 ELSE 0 END) AS seconds,
+                    SUM(CASE WHEN s.position = 3 THEN 1 ELSE 0 END) AS thirds,
+                    SUM(CASE s.position WHEN 1 THEN 10 WHEN 2 THEN 6 WHEN 3 THEN 4 ELSE 2 END) AS points
+             FROM signups s
+             JOIN users u ON u.id = s.rider_user_id
+             WHERE s.position IS NOT NULL AND s.status = 'confirmed'
+             GROUP BY s.rider_user_id
+             ORDER BY points DESC, wins DESC, firsts DESC, entries ASC
+             LIMIT :l",
+            ['l' => $limit]
+        );
     }
 
     /**
@@ -106,6 +186,7 @@ final class KpiService
             'my_signups_confirmed' => (int) $this->db->scalar("SELECT COUNT(*) FROM signups WHERE rider_user_id = :u AND status='confirmed'", ['u' => $userId]),
             'my_wins' => (int) $this->db->scalar('SELECT COUNT(*) FROM signups WHERE rider_user_id = :u AND is_winner = 1', ['u' => $userId]),
             'upcoming_competitions' => (int) $this->db->scalar("SELECT COUNT(*) FROM competitions WHERE status IN ('open','closed') AND start_at >= :n", ['n' => now_utc()]),
+            'my_ranking' => $this->riderRankFor($userId),
             'pending_shares' => (int) $this->db->scalar("SELECT COUNT(*) FROM horse_shares WHERE recipient_user_id = :u AND status='pending'", ['u' => $userId]),
             'my_horses_list' => $this->db->select("SELECT id, name, microchip_number FROM horses WHERE owner_user_id = :u AND status='active' ORDER BY id DESC LIMIT 5", ['u' => $userId]),
             'recent_results' => $this->db->select(
@@ -113,6 +194,28 @@ final class KpiService
                  FROM signups s JOIN competitions c ON c.id = s.competition_id JOIN rades r ON r.id = s.rade_id JOIN horses h ON h.id = s.horse_id
                  WHERE s.rider_user_id = :u AND s.position IS NOT NULL ORDER BY c.start_at DESC LIMIT 5", ['u' => $userId]),
         ];
+    }
+
+    /**
+     * This rider's row in the cumulative ranking (null when unranked).
+     *
+     * @param int $userId Rider id.
+     * @return array{position:int,points:int,wins:int,entries:int}|null
+     */
+    private function riderRankFor(int $userId): ?array
+    {
+        $all = $this->riderRanking(1000);
+        foreach ($all as $i => $r) {
+            if ((int) $r['rider_user_id'] === $userId) {
+                return [
+                    'position' => $i + 1,
+                    'points' => (int) $r['points'],
+                    'wins' => (int) $r['wins'],
+                    'entries' => (int) $r['entries'],
+                ];
+            }
+        }
+        return null;
     }
 
     /**

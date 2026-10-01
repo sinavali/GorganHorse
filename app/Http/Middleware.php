@@ -129,10 +129,7 @@ final class Middleware
             if ($path === $prefix || str_starts_with($path, $prefix)) { return null; }
         }
         $message = (string) $ctx->settings->get('app.maintenance_message', 'Under maintenance');
-        if ($ctx->request->isJson()) {
-            return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'MAINTENANCE', 'field' => null, 'message' => $message]], 'meta' => [], 'csrf' => null], 423);
-        }
-        return Response::html('<h1>423</h1><p>' . e($message) . '</p>', 423);
+        return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'MAINTENANCE', 'field' => null, 'message' => $message]], 'meta' => [], 'csrf' => null], 423);
     }
 
     /**
@@ -159,7 +156,7 @@ final class Middleware
      *
      * @param MiddlewareContext $ctx      Context.
      * @param bool              $required Whether authentication is required.
-     * @return Response|null 401/redirect when required and missing.
+     * @return Response|null 401 JSON error when required and missing.
      */
     public static function auth(MiddlewareContext $ctx, bool $required = true): ?Response
     {
@@ -167,10 +164,7 @@ final class Middleware
         $resolved = $ctx->auth->resolveSession($sessionId, $ctx->request->uaHash(), $ctx->request->ip());
         if ($resolved === null) {
             if (!$required) { return null; }
-            if ($ctx->request->isJson()) {
-                return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'AUTH_SESSION_EXPIRED', 'field' => null, 'message' => 'Session expired']], 'meta' => [], 'csrf' => null], 401);
-            }
-            return Response::redirect('/auth/login?expired=1');
+            return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'AUTH_SESSION_EXPIRED', 'field' => null, 'message' => 'Session expired']], 'meta' => [], 'csrf' => null], 401);
         }
         $ctx->session = $resolved['session'];
         $ctx->user = $resolved['user'];
@@ -203,10 +197,7 @@ final class Middleware
             if ($sessionId !== '') {
                 try { $ctx->auth->logout($sessionId); } catch (\Throwable) {}
             }
-            if ($ctx->request->isJson()) {
-                return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'USER_DISABLED_FULL', 'field' => null, 'message' => 'Account banned']], 'meta' => [], 'csrf' => null], 403);
-            }
-            $response = Response::redirect('/auth/login?banned=1');
+            $response = Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'USER_DISABLED_FULL', 'field' => null, 'message' => 'Account banned']], 'meta' => [], 'csrf' => null], 403);
             $response->withCookie('session_id', '', time() - 3600);
             return $response;
         }
@@ -224,10 +215,7 @@ final class Middleware
     {
         if ($ctx->user === null) { return null; }
         if (!in_array((string) $ctx->user['role'], $roles, true)) {
-            if ($ctx->request->isJson()) {
-                return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'FORBIDDEN', 'field' => null, 'message' => 'Forbidden']], 'meta' => [], 'csrf' => $ctx->csrf], 403);
-            }
-            return Response::html('<h1>403</h1><p>شما به این بخش دسترسی ندارید</p>', 403);
+            return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'FORBIDDEN', 'field' => null, 'message' => 'Forbidden']], 'meta' => [], 'csrf' => $ctx->csrf], 403);
         }
         return null;
     }
@@ -247,6 +235,11 @@ final class Middleware
         if ($ctx->request->isMethod('GET')) { return null; }
 
         $path = $ctx->request->path();
+        /* Stopping impersonation is always allowed: it is the only way out of an
+           impersonated session, so it must never be blocked here. */
+        if ($path === '/panel/impersonation/stop') {
+            return null;
+        }
         $blocked = [
             '/panel/settings',
             '/panel/users',
@@ -254,7 +247,6 @@ final class Middleware
             '/panel/demo',
             '/panel/backups',
             '/panel/profile/password',
-            '/panel/impersonation/stop',
         ];
         $blockedPrefixes = [
             '/panel/horses/',   // catches transfer/*, share/*, images/*, etc.
@@ -271,10 +263,7 @@ final class Middleware
         }
         if (!$isBlocked) { return null; }
 
-        if ($ctx->request->isJson()) {
-            return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'FORBIDDEN', 'field' => null, 'message' => 'Not allowed while impersonating']], 'meta' => [], 'csrf' => $ctx->csrf], 403);
-        }
-        return Response::html('<h1>403</h1><p>در حالت جعل هویت مجاز نیست</p>', 403);
+        return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'FORBIDDEN', 'field' => null, 'message' => 'Not allowed while impersonating']], 'meta' => [], 'csrf' => $ctx->csrf], 403);
     }
 
     /**
@@ -307,10 +296,7 @@ final class Middleware
         }
 
         if ($expected === '' || $token === '' || !hash_equals($expected, $token)) {
-            if ($ctx->request->isJson()) {
-                return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'AUTH_CSRF_INVALID', 'field' => null, 'message' => 'Invalid request']], 'meta' => [], 'csrf' => $ctx->csrf], 403);
-            }
-            return Response::html('<h1>403</h1><p>درخواست نامعتبر است</p>', 403);
+            return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'AUTH_CSRF_INVALID', 'field' => null, 'message' => 'Invalid request']], 'meta' => [], 'csrf' => $ctx->csrf], 403);
         }
         return null;
     }
@@ -344,10 +330,7 @@ final class Middleware
                 ['b' => $bucket, 'w' => utc_iso(time() - $window)]
             );
             if ($hits >= $cap) {
-                if ($ctx->request->isJson()) {
-                    return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'RATE_LIMITED', 'field' => null, 'message' => 'Too many requests']], 'meta' => [], 'csrf' => $ctx->csrf], 429);
-                }
-                return Response::html('<h1>429</h1><p>تعداد درخواست‌ها بیش از حد مجاز است</p>', 429);
+                return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'RATE_LIMITED', 'field' => null, 'message' => 'Too many requests']], 'meta' => [], 'csrf' => $ctx->csrf], 429);
             }
             $db->insert('rate_limits', [
                 'bucket' => $bucket,

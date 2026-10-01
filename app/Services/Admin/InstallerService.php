@@ -41,6 +41,39 @@ final class InstallerService
     }
 
     /**
+     * Host requirement checklist used by the installer wizard.
+     *
+     * Checks the PHP version, the extensions the panel needs, an image
+     * extension, and that every writable folder the runtime uses exists and
+     * is writable. Missing folders are reported (not created) so the wizard
+     * can show the operator exactly what to fix.
+     *
+     * @return array<int,array{label:string,ok:bool,detail:string}>
+     */
+    public function requirements(): array
+    {
+        $checks = [];
+        $checks[] = ['label' => 'نسخه PHP (حداقل 8.1)', 'ok' => PHP_VERSION_ID >= 80100, 'detail' => PHP_VERSION];
+        foreach (['pdo_sqlite', 'mbstring', 'json', 'openssl', 'fileinfo', 'curl', 'zip'] as $ext) {
+            $checks[] = ['label' => 'افزونه ' . $ext, 'ok' => extension_loaded($ext), 'detail' => extension_loaded($ext) ? 'فعال' : 'غیرفعال'];
+        }
+        $checks[] = [
+            'label' => 'افزونه GD یا Imagick',
+            'ok' => extension_loaded('gd') || extension_loaded('imagick'),
+            'detail' => extension_loaded('gd') ? 'GD' : (extension_loaded('imagick') ? 'Imagick' : 'هیچ‌کدام'),
+        ];
+        foreach (['database', 'uploads', 'cache', 'logs', 'backups'] as $dir) {
+            $path = BASE_PATH . '/' . $dir;
+            $checks[] = [
+                'label' => 'قابل نوشتن: ' . $dir,
+                'ok' => is_dir($path) && is_writable($path),
+                'detail' => is_dir($path) ? (is_writable($path) ? 'قابل نوشتن' : 'غیرقابل نوشتن') : 'وجود ندارد',
+            ];
+        }
+        return $checks;
+    }
+
+    /**
      * Run the installation.
      *
      * @param string $username  Admin username.

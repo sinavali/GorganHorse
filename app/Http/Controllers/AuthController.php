@@ -5,8 +5,10 @@ declare(strict_types=1);
  * File: app/Http/Controllers/AuthController.php
  *
  * Purpose:
- *   HTTP layer for authentication: login form + submit, OTP request/verify,
- *   rider signup, forgot page, captcha image/issue, and logout (Blueprint §10.1).
+ *   HTTP layer for authentication: password login, OTP request/verify, rider
+ *   signup, captcha issue/image, and logout (Blueprint §10.1). All endpoints
+ *   return JSON envelopes; the login/signup UI lives in the separate frontend
+ *   client.
  *
  * @package App\Http\Controllers
  */
@@ -26,22 +28,22 @@ use App\Services\AuthService;
 final class AuthController extends BaseController
 {
     /**
-     * Render the login page.
+     * Return the guest login configuration for the frontend.
      *
      * Route:   GET /auth/login
      * Auth:    guest
+     * Returns: JSON envelope { data: { sms_enabled, captcha_on_login, allow_signup, csrf } }
      */
     public function loginForm(Request $request, MiddlewareContext $ctx): Response
     {
-        $smsEnabled = (bool) $ctx->settings->get('sms.enabled', false);
-        return $this->view('auth/login', [
-            'sms_enabled' => $smsEnabled,
+        return $this->ok([
+            'sms_enabled' => (bool) $ctx->settings->get('sms.enabled', false),
             'captcha_on_login' => (bool) $ctx->settings->get('auth.captcha_on_login', false),
             'allow_signup' => (bool) $ctx->settings->get('auth.allow_signup', true),
             'expired' => (bool) $request->query('expired', false),
             'banned' => (bool) $request->query('banned', false),
             'csrf' => $this->guestCsrf($ctx),
-        ], 'auth');
+        ], $ctx);
     }
 
     /**
@@ -117,24 +119,24 @@ final class AuthController extends BaseController
         ], $ctx, 200, ['csrf' => $result['csrf']]);
         $response->withCookie('session_id', $result['session_id'], time() + ((int) $ctx->settings->get('auth.session_absolute_days', 90) * 86400));
         return $response;
-    }
-
-    /**
-     * Render the signup page.
+    }    /**
+     * Return the signup configuration for the frontend.
      *
      * Route:   GET /auth/signup
      * Auth:    guest
-     */
+     * Returns: JSON envelope { data: { allow_signup, captcha_on_signup, password_min_length, csrf } }
+ */
     public function signupForm(Request $request, MiddlewareContext $ctx): Response
     {
         if (!(bool) $ctx->settings->get('auth.allow_signup', true)) {
-            return Response::redirect('/auth/login');
+            return $this->fail('FORBIDDEN', 'Signup is disabled', $ctx, 403);
         }
-        return $this->view('auth/signup', [
+        return $this->ok([
+            'allow_signup' => true,
             'captcha_on_signup' => (bool) $ctx->settings->get('auth.captcha_on_signup', false),
             'password_min_length' => (int) $ctx->settings->get('auth.password_min_length', 8),
             'csrf' => $this->guestCsrf($ctx),
-        ], 'auth');
+        ], $ctx);
     }
 
     /**
@@ -160,14 +162,15 @@ final class AuthController extends BaseController
     }
 
     /**
-     * Render the forgot-password information page.
+     * Forgot-password information (password reset is Manager/Admin-only).
      *
      * Route:   GET /auth/forgot
      * Auth:    guest
+     * Returns: JSON envelope { data: { message } }
      */
     public function forgot(Request $request, MiddlewareContext $ctx): Response
     {
-        return $this->view('auth/forgot', ['csrf' => $this->guestCsrf($ctx)], 'auth');
+        return $this->ok(['message' => 'Password reset is handled by a Manager or Admin.'], $ctx);
     }
 
     /**
@@ -181,7 +184,7 @@ final class AuthController extends BaseController
         $token = (string) $request->attr('token', '');
         $code = $this->c->get('captcha')->peek($token);
         if ($code === null) {
-            return Response::html('', 404);
+            return $this->fail('NOT_FOUND', 'Captcha not found or expired', $ctx, 404);
         }
         return $this->c->get('captcha')->render($code);
     }

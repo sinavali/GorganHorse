@@ -25,6 +25,8 @@ use App\Http\Kernel;
 use App\Services\Admin\BackupService;
 use App\Services\Admin\DemoSeeder;
 use App\Services\Admin\InstallerService;
+use App\Services\Admin\SchedulerService;
+use App\Services\HorseHealthService;
 use App\Services\AuthService;
 use App\Services\BanService;
 use App\Services\CacheService;
@@ -33,6 +35,7 @@ use App\Services\ClubService;
 use App\Services\CompetitionService;
 use App\Services\CultureService;
 use App\Services\HorseService;
+use App\Services\LookupService;
 use App\Services\LogService;
 use App\Services\MediaService;
 use App\Services\NotificationService;
@@ -45,7 +48,6 @@ use App\Services\SettingService;
 use App\Services\SignupService;
 use App\Services\SmsService;
 use App\Services\UserService;
-use App\Services\ViewService;
 
 /**
  * Class: Bootstrap
@@ -86,26 +88,29 @@ final class Bootstrap
         }
         $c->instance('guest_csrf', $guestCsrf);
 
-        // Cache.
-        $c->singleton('cache', static fn(): CacheService => new CacheService(BASE_PATH . '/cache', true));
+        // Cache. The cache directory can be overridden via GORGAN_CACHE_DIR
+        // (used by the test runner to isolate state from the runtime data).
+        $c->singleton('cache', static fn(): CacheService => new CacheService((string) (getenv('GORGAN_CACHE_DIR') ?: BASE_PATH . '/cache'), true));
 
-        // Databases (main + logs).
+        // Databases (main + logs). Paths can be overridden via GORGAN_DB_FILE
+        // and GORGAN_LOGS_DB_FILE (used by the test runner to isolate state
+        // from the runtime data).
         $c->singleton('db', static function (Container $c): Database {
-            return new Database(BASE_PATH . '/database/app.sqlite', static function (string $msg, array $ctx, int $ms) use ($c): void {
+            return new Database((string) (getenv('GORGAN_DB_FILE') ?: BASE_PATH . '/database/app.sqlite'), static function (string $msg, array $ctx, int $ms) use ($c): void {
                 try {
                     $c->get('log')->app('warning', $msg, $ctx, $ms);
                 } catch (\Throwable) {
                 }
             });
         });
-        $c->singleton('logs_db', static fn(): Database => new Database(BASE_PATH . '/database/logs.sqlite'));
+        $c->singleton('logs_db', static fn(): Database => new Database((string) (getenv('GORGAN_LOGS_DB_FILE') ?: BASE_PATH . '/database/logs.sqlite')));
 
         // Settings + Culture.
         $c->singleton('settings', static fn(Container $c): SettingService => new SettingService($c->get('db'), $c->get('cache')));
         $c->singleton('culture', static fn(Container $c): CultureService => new CultureService($c->get('db'), $c->get('cache'), 'fa-IR'));
 
         // Logging.
-        $c->singleton('log', static fn(Container $c): LogService => new LogService($c->get('logs_db'), BASE_PATH . '/logs', $c->get('settings')));
+        $c->singleton('log', static fn(Container $c): LogService => new LogService($c->get('logs_db'), (string) (getenv('GORGAN_LOGS_DIR') ?: BASE_PATH . '/logs'), $c->get('settings')));
 
         // SMS + Media.
         $c->singleton('sms', static fn(Container $c): SmsService => new SmsService($c->get('settings'), $c->get('log'), $c->get('db')));
@@ -122,7 +127,9 @@ final class Bootstrap
         $c->singleton('users', static fn(Container $c): UserService => new UserService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('media'), $c->get('notifications')));
         $c->singleton('clubs', static fn(Container $c): ClubService => new ClubService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('media'), $c->get('notifications')));
         $c->singleton('horses', static fn(Container $c): HorseService => new HorseService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('media'), $c->get('notifications'), $c->get('sms')));
+        $c->singleton('horse_health', static fn(Container $c): HorseHealthService => new HorseHealthService($c->get('db')));
         $c->singleton('rades', static fn(Container $c): RadeService => new RadeService($c->get('db'), $c->get('log')));
+        $c->singleton('lookups', static fn(Container $c): LookupService => new LookupService($c->get('db'), $c->get('log')));
         $c->singleton('payments', static fn(Container $c): PaymentService => new PaymentService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications'), $c->get('sms')));
         $c->singleton('competitions', static fn(Container $c): CompetitionService => new CompetitionService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications')));
         $c->singleton('bans', static fn(Container $c): BanService => new BanService($c->get('db'), $c->get('log'), $c->get('notifications'), $c->get('sms')));
@@ -137,9 +144,7 @@ final class Bootstrap
         $c->singleton('backup', static fn(Container $c): BackupService => new BackupService($c->get('db'), $c->get('logs_db'), $c->get('settings'), $c->get('cache'), $c->get('log'), BASE_PATH . '/backups'));
         $c->singleton('demo', static fn(Container $c): DemoSeeder => new DemoSeeder($c->get('db'), $c->get('settings'), $c->get('log')));
         $c->singleton('installer', static fn(Container $c): InstallerService => new InstallerService($c->get('db'), $c->get('logs_db'), $c->get('settings')));
-
-        // View.
-        $c->singleton('view', static fn(Container $c): ViewService => new ViewService($c, BASE_PATH . '/app/Views'));
+        $c->singleton('scheduler', static fn(Container $c): SchedulerService => new SchedulerService($c->get('db'), $c->get('settings'), $c->get('notifications'), $c->get('log')));
 
         // Router + exception handler.
         $c->singleton('router', static function (): Router {

@@ -12,6 +12,9 @@
 /database/*.sqlite-shm
 /database/*.sqlite-journal
 
+# --- Test isolation state (throwaway DBs created by tests/run_all_tests.php)
+/tests/_state/
+
 # --- Uploads (user-generated content) --------------------------------------
 /uploads/*
 !/uploads/.htaccess

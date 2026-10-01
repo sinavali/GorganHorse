@@ -114,7 +114,65 @@ final class CultureService
                 return;
             }
         }
-        $this->setActive($this->default);
+        /* Nothing explicit: honour the culture chosen by an Admin in Settings
+           (app.default_culture, persisted in the settings table) before falling
+           back to the compiled default. This is what makes the culture switch
+           in the panel take effect for every user and every request. */
+        $configured = $this->configuredDefault();
+        $this->setActive($configured !== null && $this->exists($configured) ? $configured : $this->default);
+    }
+
+    /**
+     * Read the Admin-configured default culture from the settings table.
+     *
+     * @return string|null Culture code, or null when unset/unreadable.
+     */
+    private function configuredDefault(): ?string
+    {
+        try {
+            $value = $this->db->scalar("SELECT value FROM settings WHERE key = 'app.default_culture'");
+            $code = is_string($value) && $value !== '' ? trim($value) : null;
+            return $code;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Persist the active culture as the Admin-configured default.
+     *
+     * Used by POST /panel/culture so the choice survives restarts, is cached
+     * with the rest of the settings, and applies to users with no cookie yet.
+     *
+     * @param string $code Culture code (must exist).
+     * @return void
+     * @throws \InvalidArgumentException When the code does not exist.
+     */
+    public function setConfiguredDefault(string $code): void
+    {
+        if (!$this->exists($code)) {
+            throw new \InvalidArgumentException('Unknown culture: ' . $code);
+        }
+        $now = now_utc();
+        $updated = $this->db->execute(
+            "UPDATE settings SET value = :v, updated_at = :u WHERE key = 'app.default_culture'",
+            ['v' => $code, 'u' => $now]
+        );
+        if ($updated === 0) {
+            $this->db->insert('settings', [
+                'key' => 'app.default_culture',
+                'value' => $code,
+                'type' => 'string',
+                'grp' => 'general',
+                'updated_at' => $now,
+            ]);
+        }
+        /* Drop the settings cache entry so the next read comes from the DB. */
+        try {
+            $this->cache->forget('settings', 'app.default_culture');
+        } catch (\Throwable) {
+        }
+        $this->setActive($code);
     }
 
     /**

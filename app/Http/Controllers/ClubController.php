@@ -5,8 +5,8 @@ declare(strict_types=1);
  * File: app/Http/Controllers/ClubController.php
  *
  * Purpose:
- *   HTTP layer for clubs: list, create, view, update, delete, bans, and print
- *   (Blueprint §10.3, User Usage §7.4–7.5, §10).
+ *   HTTP layer for clubs: list, create, view, update, delete, and bans
+ *   (Blueprint §10.3, User Usage §7.4–7.5, §10). JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -39,10 +39,7 @@ final class ClubController extends BaseController
             'search' => (string) $request->query('search', ''),
         ];
         $result = $this->c->get('clubs')->list($filters, $ctx->actor(), $this->page($request), $this->perPage($request));
-        if ($request->isJson()) {
-            return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
-        }
-        return $this->view('panel/clubs', ['rows' => $result['rows'], 'total' => $result['total'], 'filters' => $filters, 'csrf' => $ctx->csrf]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
     }
 
     /**
@@ -62,13 +59,11 @@ final class ClubController extends BaseController
      *
      * Route:   GET /panel/clubs/{id}
      * Auth:    auth
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function show(Request $request, MiddlewareContext $ctx): Response
     {
-        $club = $this->c->get('clubs')->get((int) $request->attr('id'), $ctx->actor());
-        if ($request->isJson()) { return $this->ok($club, $ctx); }
-        return $this->view('panel/club-edit', ['record' => $club, 'csrf' => $ctx->csrf]);
+        return $this->ok($this->c->get('clubs')->get((int) $request->attr('id'), $ctx->actor()), $ctx);
     }
 
     /**
@@ -94,6 +89,24 @@ final class ClubController extends BaseController
     {
         $this->c->get('clubs')->delete((int) $request->attr('id'), $ctx->actor());
         return $this->ok(null, $ctx);
+    }
+
+    /**
+     * List a club's active bans.
+     *
+     * Route:   GET /panel/clubs/{id}/bans
+     * Auth:    auth
+     * Returns: JSON envelope { data: { rows } }
+     */
+    public function bans(Request $request, MiddlewareContext $ctx): Response
+    {
+        if (!in_array($ctx->user['role'], ['admin', 'manager', 'club'], true)) {
+            return $this->fail('FORBIDDEN', 'Forbidden', $ctx, 403);
+        }
+        $club = $this->c->get('clubs')->get((int) $request->attr('id'), $ctx->actor());
+        $type = (string) $request->query('type', '');
+        $rows = $this->c->get('clubs')->bans((int) $club['id'], $ctx->actor(), $type !== '' ? $type : null);
+        return $this->ok(['rows' => $rows], $ctx);
     }
 
     /**
@@ -123,16 +136,4 @@ final class ClubController extends BaseController
         return $this->ok(null, $ctx);
     }
 
-    /**
-     * Render a club print view.
-     *
-     * Route:   GET /panel/clubs/{id}/print
-     * Auth:    auth
-     * Returns: HTML print page
-     */
-    public function print(Request $request, MiddlewareContext $ctx): Response
-    {
-        $club = $this->c->get('clubs')->get((int) $request->attr('id'), $ctx->actor());
-        return $this->view('print/club', ['record' => $club, 'title' => $club['name']], 'print');
-    }
 }

@@ -37,16 +37,59 @@ final class DemoSeeder
     private SettingService $settings;
     private \App\Services\LogService $log;
 
+    /** Target rider count for a full demo dataset. */
+    private const TARGET_RIDERS = 240;
+    /** Target horse count for a full demo dataset. */
+    private const TARGET_HORSES = 520;
+    /** Target signup/order count for a full demo dataset. */
+    private const TARGET_SIGNUPS = 6000;
+
     /** @var string[] Iranian first names. */
-    private const FIRST_NAMES = ['سینا', 'امیر', 'محمد', 'علی', 'رضا', 'حسین', 'مهدی', 'سارا', 'نگار', 'الهام', 'فاطمه', 'زهرا', 'یاسر', 'بهنام', 'کامران', 'شهرام', 'پریسا', 'لیلا', 'آرش', 'فرهاد'];
+    private const FIRST_NAMES = ['سینا', 'امیر', 'محمد', 'علی', 'رضا', 'حسین', 'مهدی', 'سارا', 'نگار', 'الهام', 'فاطمه', 'زهرا', 'یاسر', 'بهنام', 'کامران', 'شهرام', 'پریسا', 'لیلا', 'آرش', 'فرهاد', 'وحید', 'بهرام', 'کیوان', 'سیاوش', 'نیما', 'رامین', 'شیما', 'مریم', 'حامد', 'پویا', 'ایمان', 'سمیرا', 'نیما', 'آرمان', 'بهاره', 'فرزاد', 'شادی', 'کاوه', 'مژگان', 'یاسین', 'رویا'];
     /** @var string[] Iranian last names. */
-    private const LAST_NAMES = ['محمدی', 'حسینی', 'رضایی', 'کریمی', 'موسوی', 'جعفری', 'احمدی', 'صادقی', 'نوری', 'قاسمی', 'شریفی', 'عبدی', 'زمانی', 'رستمی', 'کاظمی'];
-    /** @var string[] Iranian cities. */
-    private const CITIES = ['گرگان', 'تهران', 'مشهد', 'اصفهان', 'شیراز', 'بندرعباس', 'ساری', 'بجنورد', 'قزوین'];
+    private const LAST_NAMES = ['محمدی', 'حسینی', 'رضایی', 'کریمی', 'موسوی', 'جعفری', 'احمدی', 'صادقی', 'نوری', 'قاسمی', 'شریفی', 'عبدی', 'زمانی', 'رستمی', 'کاظمی', 'طاهری', 'یزدانی', 'بهرامی', 'اکبری', 'سلطانی', 'دانش', 'فرهمند', 'خسروی', 'امینی'];
+    /** @var string[] Iranian cities — weighted toward Golestan province. */
+    private const CITIES = ['گرگان', 'گرگان', 'گرگان', 'بندر ترکمن', 'آق‌قلا', 'مینودشت', 'علی‌آباد کتول', 'کردکوی', 'گمیشان', 'قشقار', 'ساری', 'بابل', 'نکا', 'بهشهر', 'قائم‌شهر', 'چالوس', 'تهران', 'مشهد', 'اصفهان', 'شیراز', 'بندرعباس', 'قزوین'];
     /** @var string[] Horse names. */
-    private const HORSE_NAMES = ['برق', 'طوفان', 'آتش', 'ستاره', 'رعد', 'سهراب', 'تندر', 'پگاه', 'دریا', 'کوه', 'باد', 'شاهین', 'تیزپا', 'گل', 'ناز', 'سیمرغ', 'آریا', 'کوروش', 'زال', 'رستم'];
-    /** @var string[] Club names. */
-    private const CLUB_NAMES = ['باشگاه هیرکان', 'باشگاه شکوه طبیعت', 'باشگاه سزار', 'باشگاه گلستان'];
+    private const HORSE_NAMES = ['برق', 'طوفان', 'آتش', 'ستاره', 'رعد', 'سهراب', 'تندر', 'پگاه', 'دریا', 'کوه', 'باد', 'شاهین', 'تیزپا', 'گل', 'ناز', 'سیمرغ', 'آریا', 'کوروش', 'زال', 'رستم', 'آذر', 'بهرام', 'پارس', 'مانی', 'نیلوفر', 'سروش', 'هما', 'کوهسار', 'ارغوان', 'آفتاب', 'مهتاب', 'پرنیان', 'زرین', 'سپیدار', 'کیوان', 'خورشید'];
+    /** @var string[] Club names — one per Golestan district/venue. */
+    private const CLUB_NAMES = [
+        'باشگاه هیرکان گرگان', 'باشگاه شکوه طبیعت گرگان', 'باشگاه سزار گرگان', 'باشگاه گلستان گرگان',
+        'باشگاه موج بندر ترکمن', 'باشگاه آق‌قلا', 'باشگاه مینودشت', 'باشگاه علی‌آباد کتول',
+        'باشگاه کردکوی', 'باشگاه گمیشان', 'باشگاه قشقار', 'باشگاه شرق گرگان',
+        'باشگاه مرکزی گرگان', 'باشگاه البرز گرگان', 'باشگاه ساحل گرگان', 'باشگاه نگین گرگان',
+        'باشگاه پارس گرگان', 'باشگاه خزر گرگان', 'باشگاه سپهر گرگان', 'باشگاه یاس گرگان',
+    ];
+    /** @var string[] Competition title stems. */
+    private const COMP_TITLES = [
+        'هفته‌ای پرش بلند', 'جام هیرکان', 'قهرمانی استان گلستان', 'دوره‌ای اسب‌دوانی',
+        'مسابقات پرش با موانع', 'جام سزار', 'دوره‌ای توان', 'آزمون عملکرد اسب‌ها',
+        'جام شکوه طبیعت', 'دوره‌ای استقامت', 'مسابقات کورس', 'جام پاییزه گرگان',
+        'دوره‌ای سرعت', 'جام بهاری طبیعت', 'آزمون مهارت‌های پایه',
+    ];
+    /** @var string[] Competition descriptions. */
+    private const COMP_DESCRIPTIONS = [
+        'این مسابقه با هدف سنجش آمادگی اسب و مهارت سوار در پرش بلند برگزار می‌شود و شامل سه رده مجزا است.',
+        'دوره‌ای سه‌روزه از تمرینات کورس و پرش، با حضور داوران رسمی استان.',
+        'رقابتی در رده‌های پایه و پیشرفته با جایزه برای سه نفر اول هر رده.',
+        'مسابقه تخصصی اسب‌های بوم استان با تمرکز بر استقامت و پیروزی در مسیرهای طبیعی.',
+        'آزمون عملکرد شامل سه مرحله: کنترل، سرعت و پرش. نتیجه به تفکیک رده اعلام می‌شود.',
+        'رویداد ویژه پایان فصل با حضور اسب‌های برتر استان و مدارس سوارکاری.',
+    ];
+    /** @var string[] Competition rule sets. */
+    private const COMP_RULES = [
+        'حضور با کارت عضویت معتبر و ریزتراشه ثبت‌شده الزامی است. کلاه ایمنی برای همه رده‌ها اجباری است.',
+        'هر سوارکار در هر رده حداکثر یک اسب می‌تواند ثبت‌نام کند. لغو ثبت‌نام تا ۴۸ ساعت قبل امکان‌پذیر است.',
+        'تجهیزات ایمنی و کفش سوارکاری پیش از ورود به میدان کنترل می‌شود. عدم رعایت موجب حذف است.',
+        'مسابقه در سه مرحله برگزار می‌شود. لغو به دلیل شرایط جوی با اطلاع یک‌روزه انجام می‌گیرد.',
+        'در صورت تساوی، مقام اول بر اساس زمان مرحله سوم و سپس نظرات داوران تعیین می‌شود.',
+    ];
+    /** @var string[] Mandatory announcements. */
+    private const ANNOUNCEMENTS = [
+        'همه سوارکاران باید کارت عضویت معتبر و بیمه اسب همراه داشته باشند؛ در غیر این صورت امکان ورود به میدان وجود ندارد.',
+        'این دوره صرفاً برای سوارکاران دارای حداقل یک شرکت تأییدشده در سال جاری است.',
+        'ورود به میدان از ساعت ۷ صبح و خروج تا ساعت ۱۸ الزامی است. تأخیر موجب حذف از رتبه‌بندی می‌شود.',
+    ];
 
     /**
      * @param Database       $db       Main DB.
@@ -70,7 +113,7 @@ final class DemoSeeder
     public function seed(): array
     {
         $existing = (int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE is_demo = 1 AND role = \'rider\'');
-        if ($existing >= 60) {
+        if ($existing >= self::TARGET_RIDERS) {
             return ['skipped' => 1, 'reason' => 'Demo data already present'];
         }
 
@@ -84,6 +127,7 @@ final class DemoSeeder
         $summary['clubs'] = $this->seedClubs();
         $summary['riders'] = $this->seedRiders();
         $summary['horses'] = $this->seedHorses();
+        $summary['health'] = $this->seedHorseHealth();
         $summary['competitions'] = $this->seedCompetitions();
         $summary['signups'] = $this->seedSignupsAndOrders();
         $summary['results'] = $this->seedResults();
@@ -91,6 +135,7 @@ final class DemoSeeder
         $summary['shares'] = $this->seedShares();
         $summary['bans'] = $this->seedBans();
         $summary['messages'] = $this->seedMessages();
+        $summary['notifications'] = $this->seedNotifications();
 
         $this->log->changelog([
             'actor_id' => null, 'actor_role' => 'system', 'action' => 'demo.seed',
@@ -109,8 +154,8 @@ final class DemoSeeder
     public function clear(): int
     {
         $tables = ['signups', 'payment_orders', 'competition_rades', 'competitions', 'horse_images', 'horse_shares',
-            'horse_transfers', 'horses', 'club_bans', 'rider_bans', 'notifications', 'message_recipients', 'messages',
-            'report_shares', 'media', 'clubs', 'rider_profiles', 'users', 'sessions'];
+            'horse_transfers', 'horse_health_records', 'horses', 'club_bans', 'rider_bans', 'notifications',
+            'message_recipients', 'messages', 'report_shares', 'media', 'clubs', 'rider_profiles', 'users', 'sessions'];
         $total = 0;
         $this->db->transaction(function () use ($tables, &$total): void {
             foreach ($tables as $t) {
@@ -153,23 +198,48 @@ final class DemoSeeder
     /** @return int Riders seeded. */
     private function seedRiders(): int
     {
-        $now = now_utc();
+        $now = time();
         $count = 0;
-        for ($i = 0; $i < 60; $i++) {
-            $level = $i < 30 ? 'active' : ($i < 50 ? 'occasional' : 'inactive');
-            $userId = $this->insertUser('rider', self::FIRST_NAMES[$i % count(self::FIRST_NAMES)], self::CITIES[$i % count(self::CITIES)], 'rider' . ($i + 1), $now, 'verified');
+        for ($i = 0; $i < self::TARGET_RIDERS; $i++) {
+            $first = self::FIRST_NAMES[$i % count(self::FIRST_NAMES)];
+            $last = self::LAST_NAMES[($i * 7 + intdiv($i, count(self::FIRST_NAMES))) % count(self::LAST_NAMES)];
+            /* Spread join dates over the last two years so the federation looks
+               established rather than freshly created. */
+            $joinedAt = $now - random_int(5, 730) * 86400;
+
+            /* Verification mix: mostly verified, with a realistic tail of
+               pending and rejected accounts plus two disabled states. */
+            $roll = $i % 20;
+            $verification = $roll === 3 ? 'pending' : ($roll === 17 ? 'rejected' : 'verified');
+            $userId = $this->insertUser('rider', $first, self::CITIES[$i % count(self::CITIES)], 'rider' . ($i + 1), utc_iso($joinedAt), $verification);
             if ($userId === 0) { continue; }
+
+            $level = match (true) {
+                $i % 5 === 0 => 'inactive',
+                $i % 3 === 0 => 'occasional',
+                default => 'active',
+            };
             $this->db->insert('rider_profiles', [
                 'user_id' => $userId,
                 'gender' => $i % 3 === 0 ? 'زن' : 'مرد',
-                'birth_date' => utc_iso($now - random_int(20, 40) * 365 * 86400),
+                'birth_date' => utc_iso($now - random_int(16, 52) * 365 * 86400),
                 'insurance_number' => 'INS' . random_digits(8),
-                'province' => 'گلستان', 'city' => self::CITIES[$i % count(self::CITIES)],
-                'address' => 'خیابان نمونه، پلاک ' . random_int(1, 300),
-                'bio' => 'سوارکار نمونه', 'experience_level' => $level,
+                'province' => $i % 10 === 0 ? 'مازندران' : 'گلستان',
+                'city' => self::CITIES[$i % count(self::CITIES)],
+                'address' => 'خیابان ' . self::CITIES[$i % count(self::CITIES)] . '، کوچه ' . random_int(1, 40) . '، پلاک ' . random_int(1, 300),
+                'bio' => 'سوارکار با سابقه در رده‌های ' . ($level === 'active' ? 'پیشرفته' : 'پایه') . '، عضو باشگاه ' . self::CLUB_NAMES[$i % count(self::CLUB_NAMES)],
+                'experience_level' => $level,
                 'my_share_code' => $this->uniqueShareCode(),
-                'is_demo' => 1, 'created_at' => $now, 'updated_at' => $now,
+                'is_demo' => 1, 'created_at' => utc_iso($joinedAt), 'updated_at' => utc_iso($joinedAt),
             ]);
+
+            /* A slice of accounts are limited or fully disabled so the
+               admin screens show those states instead of an all-green list. */
+            if ($i % 47 === 0) {
+                $this->db->update('users', ['disable_state' => 'limited', 'disable_reason' => 'محدودیت موقت باشگاهی'], 'id = :id', ['id' => $userId]);
+            } elseif ($i % 97 === 0) {
+                $this->db->update('users', ['disable_state' => 'full', 'disable_reason' => 'تعلیق با حکم هیئت'], 'id = :id', ['id' => $userId]);
+            }
             $count++;
         }
         return $count;
@@ -186,25 +256,89 @@ final class DemoSeeder
         $count = 0;
         $microchips = [];
         foreach ($riders as $idx => $rider) {
-            if ($count >= 90) { break; }
-            $n = random_int(1, 4);
-            for ($j = 0; $j < $n && $count < 90; $j++) {
+            if ($count >= self::TARGET_HORSES) { break; }
+            /* 1–6 horses per rider: a long tail of multi-horse riders. */
+            $n = random_int(1, 6);
+            for ($j = 0; $j < $n && $count < self::TARGET_HORSES; $j++) {
                 do { $mc = (string) random_int(100000000000000, 999999999999999); } while (isset($microchips[$mc]));
                 $microchips[$mc] = true;
+                /* A few horses are missing their microchip or UELN so the
+                   "incomplete data" states are represented in the grids. */
+                $noMicrochip = ($count % 41 === 0);
+                $age = random_int(2, 18);
                 $this->db->insert('horses', [
                     'uuid' => uuid4(), 'owner_user_id' => (int) $rider['id'],
-                    'name' => self::HORSE_NAMES[($count + $j) % count(self::HORSE_NAMES)] . '-' . random_int(1, 999),
-                    'microchip_number' => $mc, 'ueln' => null,
-                    'gender' => $genders[$count % max(1, count($genders))] ?? null,
-                    'race' => $races[$count % max(1, count($races))] ?? null,
-                    'color' => $colors[$count % max(1, count($colors))] ?? null,
-                    'birth_date' => utc_iso(time() - random_int(3, 12) * 365 * 86400),
-                    'ghamari_birthday' => utc_iso(time() - random_int(3, 12) * 365 * 86400),
+                    'name' => self::HORSE_NAMES[($count * 3 + $j) % count(self::HORSE_NAMES)] . '-' . random_int(1, 999),
+                    'microchip_number' => $noMicrochip ? null : $mc,
+                    'ueln' => ($count % 7 === 0) ? null : 'IR' . random_digits(12),
+                    'gender' => $genders ? $genders[$count % count($genders)] : null,
+                    'race' => $races ? $races[$count % count($races)] : null,
+                    'color' => $colors ? $colors[$count % count($colors)] : null,
+                    'birth_date' => utc_iso(time() - $age * 365 * 86400),
+                    'ghamari_birthday' => utc_iso(time() - $age * 354 * 86400),
                     'sire_name' => self::HORSE_NAMES[random_int(0, count(self::HORSE_NAMES) - 1)],
                     'dam_name' => self::HORSE_NAMES[random_int(0, count(self::HORSE_NAMES) - 1)],
-                    'breeder' => 'پرورش‌دهنده نمونه', 'registration_no' => 'REG-' . random_digits(6),
+                    'breeder' => self::CLUB_NAMES[$count % count(self::CLUB_NAMES)] . ' (پرورش داخلی)',
+                    'registration_no' => ($count % 11 === 0) ? null : 'REG-' . random_digits(6),
+                    'notes' => $count % 6 === 0 ? 'اسب آرام و مناسب رده‌های پایه.' : null,
                     'status' => 'active', 'transfer_locked' => 0, 'share_code' => random_digits(6),
-                    'is_demo' => 1, 'created_at' => $now, 'updated_at' => $now,
+                    'is_demo' => 1,
+                    'created_at' => utc_iso(time() - random_int(60, 900) * 86400),
+                    'updated_at' => $now,
+                ]);
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * Veterinary / vaccination history so the health screens have content.
+     *
+     * @return int Records seeded.
+     */
+    private function seedHorseHealth(): int
+    {
+        try {
+            $exists = (int) $this->db->scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='horse_health_records'");
+            if ($exists === 0) { return 0; }
+        } catch (\Throwable) {
+            return 0;
+        }
+        $horses = $this->db->select('SELECT id FROM horses WHERE is_demo = 1');
+        if ($horses === []) { return 0; }
+        $now = time();
+        $types = ['vaccination', 'checkup', 'treatment', 'injury', 'fitness'];
+        $titles = [
+            'vaccination' => ['واکسیناسیون آنفولانزای اسب', 'واکسیناسیون تetanوس', ' boosters کرپ'],
+            'checkup' => ['معاینه دوره‌ای', 'معاینه پیش از مسابقه'],
+            'treatment' => ['درمان آسیب تاندون', 'مراقبت پس از جراحی'],
+            'injury' => ['آسیب خفیف ساق', 'کبودی پشت'],
+            'fitness' => ['گواهی آمادگی مسابقه', 'تأیید سلامت برای صدور مجوز'],
+        ];
+        $count = 0;
+        foreach ($horses as $h) {
+            /* Not every horse has records — roughly 70% do. */
+            if (random_int(1, 10) > 7) { continue; }
+            $n = random_int(1, 4);
+            for ($i = 0; $i < $n; $i++) {
+                $type = $types[random_int(0, count($types) - 1)];
+                $performed = $now - random_int(10, 700) * 86400;
+                /* Some records have a next-due date in the future (upcoming
+                   vaccinations), some are overdue, some have none. */
+                $nextDue = random_int(1, 3) === 1 ? null : $performed + random_int(60, 900) * 86400;
+                $this->db->insert('horse_health_records', [
+                    'horse_id' => (int) $h['id'],
+                    'record_type' => $type,
+                    'title' => $titles[$type][array_rand($titles[$type])],
+                    'performed_at' => utc_iso($performed),
+                    'next_due_at' => $nextDue !== null ? utc_iso($nextDue) : null,
+                    'vet_name' => self::LAST_NAMES[array_rand(self::LAST_NAMES)] . ' — دامپزشکی مرکزی گرگان',
+                    'notes' => $type === 'injury' ? 'استراحت ۲ هفته و کنترل هفتگی توصیه شد.' : null,
+                    'cost_irt' => random_int(1, 40) * 500000,
+                    'performed_by' => null,
+                    'created_at' => utc_iso($performed),
+                    'updated_at' => utc_iso($performed),
                 ]);
                 $count++;
             }
@@ -215,47 +349,86 @@ final class DemoSeeder
     /** @return int Competitions seeded. */
     private function seedCompetitions(): int
     {
-        $clubs = $this->db->select("SELECT id FROM clubs WHERE is_demo = 1");
+        $clubs = $this->db->select("SELECT id, name, city FROM clubs WHERE is_demo = 1");
         $compRades = array_column($this->db->select('SELECT id FROM rades'), 'id');
         $payments = $this->db->select('SELECT id, amount_irt FROM payments');
-        // 52 weekly competitions over 12 months, all in the past relative to seed time.
+        if ($clubs === [] || $compRades === [] || $payments === []) { return 0; }
+
+        /* Two years of history plus eight weeks of upcoming events, so the
+           calendar, dashboards and "attention" queue all have live data. */
+        $weeksBack = 104;
+        $weeksForward = 8;
         $count = 0;
         $now = time();
-        foreach ($clubs as $clubPtr => $club) {
-            // Distribute ~13 per club.
-            for ($w = 0; $w < 13; $w++) {
-                $weeksAgo = 52 - ($count + 1);
-                $start = $now - $weeksAgo * 7 * 86400;
-                $startReg = $start - 14 * 86400;
-                $endReg = $start - 2 * 86400;
-                $status = $weeksAgo > 2 ? 'finished' : ($weeksAgo > 0 ? 'running' : 'open');
+
+        for ($w = $weeksBack + $weeksForward; $w >= -$weeksForward; $w--) {
+            $slot = ($weeksBack + $weeksForward) - $w;   /* 0 … weeksBack+forward */
+            $club = $clubs[$slot % count($clubs)];
+            /* Two competitions some weeks, one in most, none in a few. */
+            $perWeek = random_int(1, 10) <= 2 ? 2 : 1;
+
+            for ($c = 0; $c < $perWeek; $c++) {
+                /* Spread each event to a plausible hour of the day. */
+                $start = $now - $w * 7 * 86400 + $c * 36000 + random_int(0, 6) * 3600;
+                $startReg = $start - random_int(10, 30) * 86400;
+                $endReg = $start - random_int(1, 5) * 86400;
+                $isPast = $start < $now;
+                $isSoon = !$isPast && $start - $now < 14 * 86400;
+
+                if ($isPast) {
+                    $status = random_int(1, 10) <= 8 ? 'finished' : 'closed';
+                    $results = random_int(1, 20) <= 18 ? 'published' : (random_int(1, 3) === 1 ? 'confirmed' : 'draft');
+                } elseif ($isSoon) {
+                    $status = random_int(1, 10) <= 8 ? 'open' : 'closed';
+                    $results = 'draft';
+                } else {
+                    $status = random_int(1, 10) <= 6 ? 'open' : (random_int(1, 10) <= 8 ? 'closed' : 'draft');
+                    $results = 'draft';
+                }
+                /* A small share is cancelled so the badge map is exercised. */
+                if (!$isPast && random_int(1, 60) === 1) { $status = 'cancelled'; }
+
+                $titleStem = self::COMP_TITLES[($slot + $c) % count(self::COMP_TITLES)];
+                $announcement = random_int(1, 3) === 1
+                    ? self::ANNOUNCEMENTS[array_rand(self::ANNOUNCEMENTS)]
+                    : null;
+
                 $compId = $this->db->insert('competitions', [
                     'uuid' => uuid4(),
-                    'title' => 'مسابقه هفتگی پرش ' . Jalali::format($start, 'YYYY/MM/DD'),
+                    'title' => $titleStem . ' ' . Jalali::format($start, 'YYYY/MM/DD'),
                     'slug' => 'comp-' . $count . '-' . random_digits(4),
                     'venue_club_id' => (int) $club['id'],
-                    'city' => 'گرگان',
-                    'description' => 'مسابقه نمونه', 'rules' => 'قوانین استاندارد',
+                    'city' => (string) ($club['city'] ?? 'گرگان'),
+                    'description' => self::COMP_DESCRIPTIONS[($slot + $c) % count(self::COMP_DESCRIPTIONS)],
+                    'rules' => self::COMP_RULES[($slot * 2 + $c) % count(self::COMP_RULES)],
+                    'announcement' => $announcement,
+                    'announcement_required' => $announcement !== null && random_int(1, 2) === 1 ? 1 : 0,
                     'start_registration_at' => utc_iso($startReg),
                     'end_registration_at' => utc_iso($endReg),
                     'start_at' => utc_iso($start),
-                    'end_at' => utc_iso($start + 86400),
-                    'registration_paused' => 0, 'status' => $status,
-                    'results_status' => $weeksAgo > 4 ? 'published' : ($weeksAgo > 0 ? 'confirmed' : 'draft'),
-                    'results_published_at' => $weeksAgo > 4 ? utc_iso($start + 86400) : null,
+                    'end_at' => utc_iso($start + random_int(1, 2) * 86400),
+                    'registration_paused' => ($status === 'open' && random_int(1, 25) === 1) ? 1 : 0,
+                    'status' => $status,
+                    'results_status' => $results,
+                    'results_published_at' => $results === 'published' ? utc_iso($start + 86400) : null,
+                    'cancelled_at' => $status === 'cancelled' ? utc_iso($start - 3 * 86400) : null,
                     'is_demo' => 1, 'created_at' => utc_iso($startReg), 'updated_at' => utc_iso($start),
                 ]);
-                // Bind 3-6 rades.
-                $nRades = random_int(3, 6);
-                shuffle($compRades);
-                for ($k = 0; $k < $nRades && $k < count($compRades); $k++) {
+                // Bind 3-8 rades.
+                $nRades = random_int(3, 8);
+                $shuffled = $compRades;
+                shuffle($shuffled);
+                for ($k = 0; $k < $nRades && $k < count($shuffled); $k++) {
                     $pay = $payments[array_rand($payments)];
                     $this->db->insert('competition_rades', [
-                        'uuid' => uuid4(), 'competition_id' => $compId, 'rade_id' => (int) $compRades[$k],
+                        'uuid' => uuid4(), 'competition_id' => $compId, 'rade_id' => (int) $shuffled[$k],
                         'payment_id' => (int) $pay['id'],
-                        'capacity' => random_int(10, 40), 'auto_confirm' => random_int(0, 1),
-                        'had_barrage' => random_int(0, 4) === 0 ? 1 : 0, 'barrage_notes' => null,
-                        'signup_mode' => 'per_rade', 'sort_order' => $k,
+                        'capacity' => random_int(0, 10) === 0 ? null : random_int(10, 60),
+                        'auto_confirm' => random_int(0, 1),
+                        'had_barrage' => random_int(0, 5) === 0 ? 1 : 0,
+                        'barrage_notes' => null,
+                        'signup_mode' => random_int(1, 8) === 1 ? 'per_competition' : 'per_rade',
+                        'sort_order' => $k,
                         'is_demo' => 1, 'created_at' => utc_iso($startReg), 'updated_at' => utc_iso($start),
                     ]);
                 }
@@ -282,12 +455,13 @@ final class DemoSeeder
         foreach ($this->db->select('SELECT id, amount_irt FROM payments') as $p) { $prices[(int) $p['id']] = (int) $p['amount_irt']; }
         $now = now_utc();
         $count = 0;
-        $target = 1800;
+        $target = self::TARGET_SIGNUPS;
         $seen = [];
 
         foreach ($compRades as $cr) {
             if ($count >= $target) { break; }
-            $perRade = random_int(5, 20);
+            /* Popular rades fill up, unpopular ones stay empty. */
+            $perRade = random_int(0, 10) <= 1 ? random_int(0, 3) : random_int(8, 26);
             for ($s = 0; $s < $perRade && $count < $target; $s++) {
                 $rider = $riders[array_rand($riders)];
                 $riderId = (int) $rider['id'];
@@ -298,7 +472,16 @@ final class DemoSeeder
                 $seen[$dedupe] = true;
                 $amount = $prices[(int) $cr['payment_id']] ?? 0;
                 $isPast = strtotime((string) $cr['start_at']) < time();
-                $status = $isPast ? 'confirmed' : (random_int(0, 5) === 0 ? 'pending_payment' : 'confirmed');
+                /* Past events are mostly confirmed; upcoming events mix
+                   pending-payment, paid-awaiting-confirmation and rejections. */
+                $status = $isPast
+                    ? (random_int(1, 25) === 1 ? 'withdrawn' : 'confirmed')
+                    : match (true) {
+                        random_int(1, 4) === 1 => 'pending_payment',
+                        random_int(1, 8) === 1 => 'paid',
+                        random_int(1, 20) === 1 => 'rejected',
+                        default => 'confirmed',
+                    };
                 $signupId = $this->db->insert('signups', [
                     'uuid' => uuid4(), 'competition_id' => (int) $cr['competition_id'],
                     'competition_rade_id' => (int) $cr['id'], 'rade_id' => (int) $cr['rade_id'],
@@ -314,7 +497,9 @@ final class DemoSeeder
                 // Payment order.
                 $orderStatus = match (true) {
                     $status === 'pending_payment' => 'pending',
-                    random_int(0, 40) === 0 => 'refunded',
+                    $status === 'rejected' => (random_int(1, 3) === 1 ? 'failed' : 'refunded'),
+                    random_int(1, 30) === 1 => 'pending_refund',
+                    random_int(1, 45) === 1 => 'refunded',
                     default => 'paid',
                 };
                 $orderUuid = uuid4();
@@ -322,7 +507,9 @@ final class DemoSeeder
                     'uuid' => $orderUuid, 'signup_id' => $signupId,
                     'competition_id' => (int) $cr['competition_id'], 'rider_user_id' => $riderId,
                     'amount_irt' => $amount, 'status' => $orderStatus,
-                    'authority' => 'A' . random_digits(20), 'ref_id' => $orderStatus === 'paid' || $orderStatus === 'refunded' ? (string) random_int(100000000, 999999999) : null,
+                    'authority' => 'A' . random_digits(20),
+                    'ref_id' => $orderStatus === 'paid' || $orderStatus === 'refunded' || $orderStatus === 'pending_refund'
+                        ? (string) random_int(100000000, 999999999) : null,
                     'card_pan' => '6037****' . random_digits(4), 'description' => 'شرکت در مسابقه',
                     'gateway' => 'zarinpal', 'verified_at' => $orderStatus !== 'pending' ? $cr['start_at'] : null,
                     'refunded_at' => $orderStatus === 'refunded' ? $now : null,
@@ -363,18 +550,25 @@ final class DemoSeeder
     /** @return int Transfers seeded. */
     private function seedTransfers(): int
     {
-        $horses = $this->db->select("SELECT id, owner_user_id FROM horses WHERE is_demo = 1 LIMIT 12");
+        $horses = $this->db->select("SELECT id, owner_user_id FROM horses WHERE is_demo = 1 LIMIT 40");
         $riders = array_column($this->db->select("SELECT id FROM users WHERE role = 'rider' AND is_demo = 1"), 'id');
+        if ($horses === [] || $riders === []) { return 0; }
         $now = now_utc();
         $count = 0;
         foreach ($horses as $h) {
             $toUser = $riders[array_rand($riders)];
             if ((int) $toUser === (int) $h['owner_user_id']) { continue; }
+            /* Mix of pending, accepted, rejected and expired transfers so the
+               detail screen shows every branch of the transfer state machine. */
+            $status = ['pending', 'accepted', 'accepted', 'rejected', 'expired'][array_rand(['pending', 'accepted', 'accepted', 'rejected', 'expired'])];
+            $createdAt = time() - random_int(3, 120) * 86400;
             $this->db->insert('horse_transfers', [
                 'horse_id' => (int) $h['id'], 'from_user_id' => (int) $h['owner_user_id'],
                 'to_user_id' => (int) $toUser, 'transfer_code' => random_alnum(8),
-                'status' => 'accepted', 'accepted_at' => utc_iso(strtotime('-30 days')), 'expires_at' => utc_iso(strtotime('+7 days')),
-                'is_demo' => 1, 'created_at' => utc_iso(strtotime('-40 days')), 'updated_at' => $now,
+                'status' => $status,
+                'accepted_at' => $status === 'accepted' ? utc_iso($createdAt + 3 * 86400) : null,
+                'expires_at' => utc_iso($createdAt + 7 * 86400),
+                'is_demo' => 1, 'created_at' => utc_iso($createdAt), 'updated_at' => $now,
             ]);
             $count++;
         }
@@ -384,17 +578,71 @@ final class DemoSeeder
     /** @return int Shares seeded. */
     private function seedShares(): int
     {
-        $horses = $this->db->select("SELECT id, owner_user_id FROM horses WHERE is_demo = 1 LIMIT 20");
+        $horses = $this->db->select("SELECT id, owner_user_id FROM horses WHERE is_demo = 1 LIMIT 70");
         $riders = array_column($this->db->select("SELECT id FROM users WHERE role = 'rider' AND is_demo = 1"), 'id');
+        if ($horses === [] || $riders === []) { return 0; }
         $now = now_utc();
         $count = 0;
         foreach ($horses as $h) {
             $toUser = $riders[array_rand($riders)];
             if ((int) $toUser === (int) $h['owner_user_id']) { continue; }
+            $status = ['pending', 'pending', 'accepted', 'rejected', 'revoked'][array_rand(['pending', 'pending', 'accepted', 'rejected', 'revoked'])];
             $this->db->insert('horse_shares', [
                 'horse_id' => (int) $h['id'], 'owner_user_id' => (int) $h['owner_user_id'],
-                'recipient_user_id' => (int) $toUser, 'status' => random_int(0, 1) ? 'accepted' : 'pending',
-                'is_demo' => 1, 'created_at' => utc_iso(strtotime('-20 days')), 'updated_at' => $now,
+                'recipient_user_id' => (int) $toUser, 'status' => $status,
+                'is_demo' => 1,
+                'created_at' => utc_iso(time() - random_int(1, 90) * 86400),
+                'updated_at' => $now,
+            ]);
+            $count++;
+        }
+        return $count;
+    }
+
+    /**
+     * In-app notifications for staff and riders, so the bell and the
+     * notifications page are not empty.
+     *
+     * @return int Notifications seeded.
+     */
+    private function seedNotifications(): int
+    {
+        $admins = array_column($this->db->select("SELECT id FROM users WHERE role IN ('admin','manager')"), 'id');
+        $riders = array_column($this->db->select("SELECT id FROM users WHERE role = 'rider' AND is_demo = 1 LIMIT 40"), 'id');
+        $comps = $this->db->select("SELECT id, title FROM competitions WHERE is_demo = 1 AND start_at >= :n ORDER BY start_at ASC LIMIT 8", ['n' => now_utc()]);
+        if ($admins === []) { return 0; }
+
+        $templates = [
+            ['signup.received', 'ثبت‌نام جدید', 'یک سوارکار جدید برای مسابقه ثبت‌نام کرد.', '/panel/signups'],
+            ['payment.paid', 'پرداخت موفق', 'پرداخت یک ثبت‌نام با موفقیت انجام شد.', '/panel/payment-orders'],
+            ['signup.paid', 'در انتظار تأیید', 'ثبت‌نام پرداخت‌شده منتظر تأیید مدیر است.', '/panel/signups'],
+            ['horse.shared', 'درخواست اشتراک اسب', 'سوارکاری اسب را با شما به اشتراک گذاشته است.', '/panel/horse-shares'],
+            ['competition.open', 'ثبت‌نام مسابقه باز شد', 'ثبت‌نام مسابقه جدید آغاز شده است.', '/panel/competitions'],
+            ['refund.requested', 'درخواست استرداد', 'یک سفارش وارد صف استرداد شده است.', '/panel/payment-orders'],
+        ];
+        $count = 0;
+        $now = time();
+        for ($i = 0; $i < 60; $i++) {
+            $t = $templates[array_rand($templates)];
+            $this->db->insert('notifications', [
+                'user_id' => (int) $admins[array_rand($admins)],
+                'type' => $t[0], 'title' => $t[1], 'body' => $t[2], 'link' => $t[3],
+                'ref_type' => null, 'ref_id' => null,
+                'is_read' => $i % 3 === 0 ? 1 : 0,
+                'created_at' => utc_iso($now - random_int(1, 600) * 3600),
+            ]);
+            $count++;
+        }
+        foreach (array_slice($riders, 0, 25) as $riderId) {
+            $comp = $comps[array_rand($comps)] ?? null;
+            $this->db->insert('notifications', [
+                'user_id' => (int) $riderId,
+                'type' => 'signup.status', 'title' => 'وضعیت ثبت‌نام شما تغییر کرد',
+                'body' => $comp !== null ? ('وضعیت ثبت‌نام شما در «' . $comp['title'] . '» به‌روزرسانی شد.') : 'وضعیت ثبت‌نام شما به‌روزرسانی شد.',
+                'link' => $comp !== null ? ('/panel/rider/competitions/' . (int) $comp['id']) : '/panel/rider/signups',
+                'ref_type' => null, 'ref_id' => null,
+                'is_read' => random_int(0, 1),
+                'created_at' => utc_iso($now - random_int(1, 400) * 3600),
             ]);
             $count++;
         }
@@ -409,11 +657,12 @@ final class DemoSeeder
         $horses = array_column($this->db->select("SELECT id FROM horses WHERE is_demo = 1"), 'id');
         $now = now_utc();
         $count = 0;
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 12; $i++) {
             $this->db->insert('club_bans', [
                 'club_id' => $clubs[array_rand($clubs)], 'target_type' => $i % 2 === 0 ? 'rider' : 'horse',
                 'target_id' => $i % 2 === 0 ? $riders[array_rand($riders)] : $horses[array_rand($horses)],
-                'reason' => 'دلیل نمونه', 'banned_by' => $riders[0] ?? 1, 'is_active' => 1, 'is_demo' => 1,
+                'reason' => ['عدم رعایت آیین‌نامه باشگاه', 'آسیب‌دیدگی در جریان مسابقه', 'پذیرش‌نشدن در معاینه دامپزشکی', 'تأخیر در پرداخت هزینه'][array_rand([0, 1, 2, 3])],
+                'banned_by' => $riders[0] ?? 1, 'is_active' => $i % 3 === 0 ? 0 : 1, 'is_demo' => 1,
                 'created_at' => $now, 'updated_at' => $now,
             ]);
             $count++;

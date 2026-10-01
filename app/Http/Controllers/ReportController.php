@@ -24,23 +24,15 @@ use App\Http\MiddlewareContext;
 final class ReportController extends BaseController
 {
     /**
-     * Render the reports page with presets.
+     * List report presets.
      *
      * Route:   GET /panel/reports
      * Auth:    auth
-     * Returns: HTML or JSON (presets)
+     * Returns: JSON envelope (presets)
      */
     public function index(Request $request, MiddlewareContext $ctx): Response
     {
-        $engine = $this->c->get('reports');
-        $presets = $engine->presets();
-        if ($request->isJson()) { return $this->ok($presets, $ctx); }
-        return $this->view('panel/reports', [
-            'presets' => $presets,
-            'report' => (string) $request->query('report', 'signups'),
-            'csrf' => $ctx->csrf,
-            'max_export_rows' => (int) $ctx->settings->get('reports.max_export_rows', 50000),
-        ]);
+        return $this->ok($this->c->get('reports')->presets(), $ctx);
     }
 
     /**
@@ -87,7 +79,7 @@ final class ReportController extends BaseController
         $token = (string) $request->attr('token');
         $path = $this->exportPath($token);
         if (!is_file($path)) {
-            return Response::html('Export expired or not found', 404);
+            return $this->fail('NOT_FOUND', 'Export expired or not found', $ctx, 404);
         }
         $meta = json_decode((string) file_get_contents($path . '.meta'), true) ?: [];
         $filename = (string) ($meta['filename'] ?? 'report.csv');

@@ -8,6 +8,7 @@ declare(strict_types=1);
  *   HTTP layer for the unified users module: list, create, view, update, delete,
  *   verify, reject, disable/enable, reset password, impersonate, session
  *   revocation, and bulk operations (Blueprint §10.3, User Usage §7.2–7.3).
+ *   JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -30,7 +31,7 @@ final class UserController extends BaseController
      * Route:   GET /panel/users
      * Auth:    role:admin,manager
      * Params:  role?, status?, search?, page?, per_page?
-     * Returns: HTML page (browser) or JSON envelope (API)
+     * Returns: JSON envelope
      */
     public function index(Request $request, MiddlewareContext $ctx): Response
     {
@@ -41,13 +42,7 @@ final class UserController extends BaseController
             'search' => (string) $request->query('search', ''),
         ];
         $result = $service->list($filters, $ctx->actor(), $this->page($request), $this->perPage($request));
-        if ($request->isJson()) {
-            return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
-        }
-        return $this->view('panel/users', [
-            'rows' => $result['rows'], 'total' => $result['total'], 'filters' => $filters,
-            'csrf' => $ctx->csrf, 'role' => $ctx->user['role'],
-        ]);
+        return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
     }
 
     /**
@@ -65,12 +60,12 @@ final class UserController extends BaseController
     }
 
     /**
-     * Show a user detail page or JSON.
+     * Show a user.
      *
      * Route:   GET /panel/users/{id}
      * Auth:    role:admin,manager (or self)
      * Params:  id (route)
-     * Returns: HTML page or JSON envelope
+     * Returns: JSON envelope
      */
     public function show(Request $request, MiddlewareContext $ctx): Response
     {
@@ -78,9 +73,7 @@ final class UserController extends BaseController
         if (!in_array($ctx->user['role'], ['admin', 'manager'], true) && (int) $ctx->user['id'] !== $id) {
             return $this->fail('FORBIDDEN', 'Forbidden', $ctx, 403);
         }
-        $user = $this->c->get('users')->get($id);
-        if ($request->isJson()) { return $this->ok($user, $ctx); }
-        return $this->view('panel/user-edit', ['record' => $user, 'csrf' => $ctx->csrf, 'role' => $ctx->user['role']]);
+        return $this->ok($this->c->get('users')->get($id), $ctx);
     }
 
     /**
@@ -266,24 +259,15 @@ final class UserController extends BaseController
     }
 
     /**
-     * Show the current user's own profile page.
+     * Show the current user's profile.
      *
      * Route:   GET /panel/profile
      * Auth:    auth
-     * Returns: HTML or JSON envelope
+     * Returns: JSON envelope
      */
     public function profile(Request $request, MiddlewareContext $ctx): Response
     {
-        $record = $this->c->get('users')->get((int) $ctx->user['id']);
-        if ($request->isJson()) { return $this->ok($record, $ctx); }
-        $sessions = $this->c->get('auth')->sessionsFor((int) $ctx->user['id']);
-        return $this->view('panel/profile', [
-            'record' => $record,
-            'sessions' => $sessions,
-            'current_session' => (string) ($request->cookie('session_id') ?? ''),
-            'tab' => 'profile',
-            'csrf' => $ctx->csrf,
-        ]);
+        return $this->ok($this->c->get('users')->get((int) $ctx->user['id']), $ctx);
     }
 
     /**
@@ -323,14 +307,13 @@ final class UserController extends BaseController
      *
      * Route:   GET /panel/profile/sessions
      * Auth:    auth
-     * Returns: HTML or JSON envelope
+     * Returns: JSON envelope
      */
     public function sessions(Request $request, MiddlewareContext $ctx): Response
     {
         $rows = $this->c->get('auth')->sessionsFor((int) $ctx->user['id']);
         $current = (string) ($request->cookie('session_id') ?? '');
-        if ($request->isJson()) { return $this->ok(['rows' => $rows, 'current' => $current], $ctx); }
-        return $this->view('panel/profile', ['record' => $this->c->get('users')->get((int) $ctx->user['id']), 'sessions' => $rows, 'current_session' => $current, 'tab' => 'sessions', 'csrf' => $ctx->csrf]);
+        return $this->ok(['rows' => $rows, 'current' => $current], $ctx);
     }
 
     /**

@@ -229,6 +229,52 @@ final class UserService
     }
 
     /**
+     * Build a unique username for a user whose role just changed.
+     *
+     * Riders log in with a numeric handle, so an existing (e.g. human) username
+     * would break their login expectations; clubs and staff keep a handle. The
+     * previous handle is reused when it is still valid and free, otherwise a
+     * fresh numeric handle is generated.
+     *
+     * @param int   $id      User id.
+     * @param string $newRole New role.
+     * @param array $user    Current user row.
+     * @return string
+     */
+    private function deriveUsernameForRole(int $id, string $newRole, array $user): string
+    {
+        $current = (string) $user['username'];
+        $isFree = fn(string $candidate): bool => $this->db->scalar(
+            'SELECT COUNT(*) FROM users WHERE username = :u AND id != :id',
+            ['u' => $candidate, 'id' => $id]
+        ) === 0;
+        if ($newRole === 'rider') {
+            if (preg_match('/^\d{6,8}$/', $current) && $isFree($current)) {
+                return $current;
+            }
+            do {
+                $candidate = (string) random_int(100000, 99999999);
+            } while (!$isFree($candidate));
+            return $candidate;
+        }
+        if ($newRole === 'club' && preg_match('/^\d{6,8}$/', $current)) {
+            // A numeric rider handle must not remain as a club handle.
+            do {
+                $candidate = 'club' . random_digits(4);
+            } while (!$isFree($candidate));
+            return $candidate;
+        }
+        if ($isFree($current)) {
+            return $current;
+        }
+        $base = substr(preg_replace('/[^A-Za-z0-9_.\-]/', '', $current) ?: 'user', 0, 20) ?: 'user';
+        do {
+            $candidate = $base . random_digits(3);
+        } while (!$isFree($candidate));
+        return $candidate;
+    }
+
+    /**
      * Update a user's editable fields.
      *
      * @param int   $id    User id.
@@ -274,10 +320,49 @@ final class UserService
         if (in_array($actor['role'], ['admin', 'manager'], true)) {
             if (array_key_exists('disable_state', $input)) { $data['disable_state'] = $input['disable_state']; }
         }
+        /* Role changes are Admin-only and guarded:
+           - a user may not change their own role (avoids accidental lock-out);
+           - the federation must keep at least one active Admin;
+           - the username is auto-derived for riders/clubs, so it follows the role. */
+        if (array_key_exists('role', $input) && $input['role'] !== null && $input['role'] !== '' && $input['role'] !== $user['role']) {
+            $newRole = (string) $input['role'];
+            if ($actor['role'] !== 'admin') {
+                throw new ForbiddenException('Only admins may change user roles', 'FORBIDDEN');
+            }
+            if (!in_array($newRole, ['admin', 'manager', 'rider', 'club'], true)) {
+                throw new ValidationException('Invalid role', 'role', 'USER_ROLE_INVALID');
+            }
+            if ((int) $user['id'] === (int) $actor['id']) {
+                throw new DomainException('USER_ROLE_SELF_CHANGE_FORBIDDEN', 'You cannot change your own role', 422, 'role');
+            }
+            if ($user['role'] === 'admin' && $this->db->scalar(
+                "SELECT COUNT(*) FROM users WHERE role = 'admin' AND disable_state = 'none' AND id != :id",
+                ['id' => $id]
+            ) < 1) {
+                throw new DomainException('USER_LAST_ADMIN', 'At least one admin must remain', 422, 'role');
+            }
+            $data['role'] = $newRole;
+            $data['username'] = $this->deriveUsernameForRole($id, $newRole, $user);
+        }
         $data['updated_at'] = now_utc();
 
         $this->db->transaction(function () use ($id, $data, $input, $actor, $user): void {
             $this->db->update('users', $data, 'id = :id', ['id' => $id]);
+            /* A user promoted to rider needs a rider profile row (share code,
+               insurance metadata) or their profile page has nothing to edit. */
+            if (($data['role'] ?? null) === 'rider') {
+                $hasProfile = (int) $this->db->scalar('SELECT COUNT(*) FROM rider_profiles WHERE user_id = :u', ['u' => $id]) > 0;
+                if (!$hasProfile) {
+                    $this->db->insert('rider_profiles', [
+                        'user_id' => $id,
+                        'my_share_code' => random_digits((int) ($this->settings->get('horses.share_code_length', 6))),
+                        'experience_level' => 'active',
+                        'is_demo' => 0,
+                        'created_at' => now_utc(),
+                        'updated_at' => now_utc(),
+                    ]);
+                }
+            }
             if ($user['role'] === 'rider' && isset($input['rider_profile']) && is_array($input['rider_profile'])) {
                 $allowed = ['gender', 'birth_date', 'insurance_number', 'province', 'city', 'address', 'bio', 'emergency_name', 'emergency_phone'];
                 $profile = array_intersect_key($input['rider_profile'], array_flip($allowed));

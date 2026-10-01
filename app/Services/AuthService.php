@@ -326,11 +326,22 @@ final class AuthService
             $this->db->delete('sessions', 'id = :id', ['id' => $sessionId]);
             return null;
         }
-        if (($session['ip'] ?? '') !== $ip && $session['ip'] !== null) {
+        /* IP binding is an auditing signal, not an auto-kill.
+           Reverse proxies, mobile networks and load balancers legitimately
+           change the client IP between two requests, and killing the session
+           after a couple of mismatches signs the user out mid-work. The counter
+           is still tracked (and logged) so suspicious movement is auditable. */
+        if (($session['ip'] ?? '') !== $ip && $session['ip'] !== null && !self::sameIpClass((string) $session['ip'], $ip)) {
             $count = (int) $session['mismatch_count'] + 1;
-            if ($count >= 2) {
+            $tolerance = (int) $this->settings->get('auth.session_ip_mismatch_tolerance', 10);
+            if ($tolerance > 0 && $count >= $tolerance) {
                 $this->db->delete('sessions', 'id = :id', ['id' => $sessionId]);
-                $this->log->app('warning', 'Session killed after repeated IP change', ['session_id' => $sessionId]);
+                $this->log->app('warning', 'Session killed after repeated IP change', [
+                    'session_id' => $sessionId,
+                    'previous_ip' => $session['ip'],
+                    'ip' => $ip,
+                    'mismatches' => $count,
+                ]);
                 return null;
             }
             $this->db->update('sessions', ['mismatch_count' => $count, 'ip' => $ip], 'id = :id', ['id' => $sessionId]);
@@ -345,6 +356,30 @@ final class AuthService
             'user' => $user,
             'csrf' => (string) ($payload['csrf_token'] ?? ''),
         ];
+    }
+
+    /**
+     * Whether two addresses belong to the same trust zone.
+     *
+     * Loopback and private ranges are all treated as one zone: a reverse proxy
+     * or container runtime routinely mixes 127.0.0.1 with 10.x / 192.168.x,
+     * and that must not count as a suspicious IP change.
+     *
+     * @param string $a First address.
+     * @param string $b Second address.
+     * @return bool
+     */
+    private static function sameIpClass(string $a, string $b): bool
+    {
+        if ($a === $b) { return true; }
+        $local = static fn(string $ip): bool => $ip === ''
+            || $ip === '::1'
+            || str_starts_with($ip, '127.')
+            || str_starts_with($ip, '10.')
+            || str_starts_with($ip, '192.168.')
+            || str_starts_with($ip, '169.254.')
+            || preg_match('/^172\.(1[6-9]|2\d|3[01])\./', $ip) === 1;
+        return $local($a) && $local($b);
     }
 
     /** Rotate a session's id and CSRF token (login/privilege change). */

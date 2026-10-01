@@ -101,6 +101,7 @@ final class SettingService
             'auth.password_require_digit' => self::def('bool', 'auth', 'نیاز به رقم', 'اجبار رقم.', false),
             'auth.password_require_symbol' => self::def('bool', 'auth', 'نیاز به نماد', 'اجبار نماد.', false),
             'auth.session_absolute_days' => self::def('int', 'auth', 'عمر نشست (روز)', 'عمر مطلق نشست.', 90),
+            'auth.session_ip_mismatch_tolerance' => self::def('int', 'auth', 'تحمل تغییر IP نشست', 'تعداد تغییر IP مجاز پیش از باطل‌شدن نشست. صفر یعنی هرگز.', 10),
             'auth.captcha_on_login' => self::def('bool', 'auth', 'کپچا در ورود', 'نمایش کپچا در ورود.', false),
             'auth.captcha_on_signup' => self::def('bool', 'auth', 'کپچا در ثبت‌نام', 'نمایش کپچا در ثبت‌نام.', false),
             'auth.captcha_on_otp_request' => self::def('bool', 'auth', 'کپچا در OTP', 'نمایش کپچا در درخواست OTP.', false),
@@ -180,6 +181,12 @@ final class SettingService
             'backup.include_shares' => self::def('bool', 'backup', 'شامل اشتراک‌ها', 'شامل پوشه اشتراک در پشتیبان.', false),
             'backup.retention_count' => self::def('int', 'backup', 'تعداد پشتیبان', 'تعداد پشتیبان نگهداری‌شده.', 10),
             'backup.suffix_default' => self::def('string', 'backup', 'پسوند پیش‌فرض', 'پسوند نام پشتیبان.', 'manual'),
+            // --- scheduler (see app/Services/Admin/SchedulerService.php) ---
+            'scheduler.enabled' => self::def('bool', 'scheduler', 'اجرای زمان‌بند', 'اجازه اجرای کارهای دوره‌ای با cron.', false),
+            'scheduler.deadline_alert_days' => self::def('int', 'scheduler', 'هشدار پایان مهلت', 'چند روز قبل از بسته‌شدن ثبت‌نام به مدیران هشدار داده شود.', 2),
+            'scheduler.auto_verify' => self::def('bool', 'scheduler', 'تأیید خودکار سوارکار', 'تأیید خودکار سوارکاران واجد شرایط.', false),
+            'scheduler.auto_verify_min_age_hours' => self::def('int', 'scheduler', 'حداقل سن حساب برای تأیید', 'ساعت‌هایی که باید از ساخت حساب گذشته باشد.', 24),
+            'scheduler.auto_backup' => self::def('bool', 'scheduler', 'پشتیبان خودکار', 'تهیه پشتیبان شبانه به‌صورت خودکار.', false),
             // --- security ---
             'security.headers_csp' => self::def('string', 'security', 'CSP', 'سیاست امنیت محتوا.', "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"),
             'security.headers_hsts' => self::def('string', 'security', 'HSTS', 'هدر HSTS.', 'max-age=31536000; includeSubDomains'),

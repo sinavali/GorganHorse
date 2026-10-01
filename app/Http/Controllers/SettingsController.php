@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * Purpose:
  *   HTTP layer for settings (general, SMS, payment, cache) — Admin only
- *   (Blueprint §15; User Usage §7.21).
+ *   (Blueprint §15; User Usage §7.21). JSON API only.
  *
  * @package App\Http\Controllers
  */
@@ -24,11 +24,30 @@ use App\Http\MiddlewareContext;
 final class SettingsController extends BaseController
 {
     /**
+     * Host requirement checklist (PHP version, extensions, writable folders).
+     *
+     * Route:   GET /panel/requirements
+     * Auth:    guest (the installer wizard runs before any account exists)
+     * Returns: JSON envelope { data: { installed, requirements[] } }
+     *
+     * The installer wizard is served as an SPA page at /install; this is the
+     * only JSON endpoint behind it.
+     */
+    public function requirements(Request $request, MiddlewareContext $ctx): Response
+    {
+        $installer = $this->c->get('installer');
+        return $this->ok([
+            'installed' => (bool) $ctx->settings->get('app.installed', false),
+            'requirements' => $installer->requirements(),
+        ], $ctx);
+    }
+
+    /**
      * Show settings (grouped) or update them.
      *
      * Route:   GET|POST /panel/settings
      * Auth:    role:admin
-     * Returns: HTML (GET) or JSON envelope { data: null } (POST)
+     * Returns: JSON envelope
      */
     public function index(Request $request, MiddlewareContext $ctx): Response
     {
@@ -39,16 +58,15 @@ final class SettingsController extends BaseController
             $this->c->get('log')->audit(['actor_id' => (int) $ctx->user['id'], 'actor_role' => 'admin', 'action' => 'settings.update', 'target_type' => 'settings', 'target_id' => 0, 'diff' => array_keys($input)]);
             return $this->ok(null, $ctx);
         }
-        if ($request->isJson()) { return $this->ok($settings->grouped(), $ctx); }
-        return $this->view('panel/settings', ['groups' => $settings->grouped(), 'csrf' => $ctx->csrf]);
+        return $this->ok($settings->grouped(), $ctx);
     }
 
     /**
-     * SMS settings page / update.
+     * SMS settings (read or update).
      *
      * Route:   GET|POST /panel/settings/sms
      * Auth:    role:admin
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function sms(Request $request, MiddlewareContext $ctx): Response
     {
@@ -58,7 +76,7 @@ final class SettingsController extends BaseController
             return $this->ok(null, $ctx);
         }
         $groups = $settings->grouped();
-        return $this->view('panel/settings', ['groups' => ['sms' => $groups['sms'] ?? [], 'general' => [], 'whitelabel' => [], 'auth' => [], 'uploads' => [], 'clubs' => [], 'horses' => [], 'competitions' => [], 'payments' => [], 'reports' => [], 'cache' => [], 'logs' => [], 'backup' => [], 'security' => [], 'ui' => [], 'identity' => []], 'csrf' => $ctx->csrf, 'active' => 'sms']);
+        return $this->ok(['sms' => $groups['sms'] ?? []], $ctx);
     }
 
     /**
@@ -77,11 +95,11 @@ final class SettingsController extends BaseController
     }
 
     /**
-     * Payment settings page / update.
+     * Payment settings (read or update).
      *
      * Route:   GET|POST /panel/settings/payment
      * Auth:    role:admin
-     * Returns: HTML or JSON
+     * Returns: JSON envelope
      */
     public function payment(Request $request, MiddlewareContext $ctx): Response
     {
@@ -91,7 +109,59 @@ final class SettingsController extends BaseController
             return $this->ok(null, $ctx);
         }
         $groups = $settings->grouped();
-        return $this->view('panel/settings', ['groups' => ['payments' => $groups['payments'] ?? []], 'csrf' => $ctx->csrf, 'active' => 'payments']);
+        return $this->ok(['payments' => $groups['payments'] ?? []], $ctx);
+    }
+
+    /**
+     * List the active cultures available in the panel.
+     *
+     * Route:   GET /panel/cultures
+     * Auth:    any authenticated user
+     * Returns: JSON envelope { data: { active, cultures: [{code,name,direction}] } }
+     */
+    public function cultures(Request $request, MiddlewareContext $ctx): Response
+    {
+        $culture = $this->c->get('culture');
+        $rows = array_map(static function (array $row): array {
+            return [
+                'code' => (string) $row['code'],
+                'name' => (string) ($row['name'] ?? $row['code']),
+                'direction' => (string) $row['direction'],
+            ];
+        }, $culture->list());
+        if ($rows === []) {
+            $rows = [['code' => 'fa-IR', 'name' => 'فارسی', 'direction' => 'rtl']];
+        }
+        return $this->ok(['active' => $culture->code(), 'cultures' => $rows], $ctx);
+    }
+
+    /**
+     * Persist the active culture (Admin only) and set the culture cookie.
+     *
+     * The choice is stored as app.default_culture (cached with the other
+     * settings) and echoed to the client through a cookie so every later
+     * request resolves it without a query parameter.
+     *
+     * Route:   POST /panel/culture
+     * Auth:    role:admin
+     * Body:    { culture: 'fa-IR'|'en-US' }
+     * Returns: JSON envelope { data: { culture } }
+     */
+    public function setCulture(Request $request, MiddlewareContext $ctx): Response
+    {
+        $culture = $this->c->get('culture');
+        $code = (string) ($this->input($request)['culture'] ?? '');
+        try {
+            $culture->setConfiguredDefault($code);
+        } catch (\InvalidArgumentException) {
+            return $this->fail('CULTURE_INVALID', 'این زبان در دسترس نیست', $ctx, 422, 'culture');
+        }
+        $this->c->get('log')->audit([
+            'actor_id' => (int) $ctx->user['id'], 'actor_role' => 'admin', 'action' => 'settings.culture',
+            'target_type' => 'settings', 'target_id' => 0, 'diff' => ['culture' => $code],
+        ]);
+        return $this->ok(['culture' => $culture->code()], $ctx)
+            ->withCookie('culture', $culture->code(), time() + 31536000, '/', false, 'Lax');
     }
 
     /**

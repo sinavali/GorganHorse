@@ -8,7 +8,9 @@ declare(strict_types=1);
  *   Pipeline orchestrator. Builds the middleware context, runs the ordered
  *   middleware stack, matches the route, invokes the controller, applies
  *   response headers, and funnels all exceptions through the Handler
- *   (Technical §4.1, §5, §13, §28).
+ *   (Technical §4.1, §5, §13, §28). All responses — success and error — are
+ *   JSON envelopes; the backend does not render HTML (the UI is a separate
+ *   client application consuming this API).
  *
  * Dependencies: Container bindings (settings, culture, auth, users, router,
  *               log, handler) resolved via the container.
@@ -112,6 +114,16 @@ final class Kernel
             // 4. Auth.
             if (($r = Middleware::auth($ctx, $requiresAuth)) !== null) { return $this->finalize($r, $ctx); }
 
+            // 4b. Guest CSRF hydration. Guests have no session-bound token, so
+            // expose the boot-time guest token via meta.csrf. The SPA echoes it
+            // back through X-CSRF-Token on guest POSTs (install, login, signup,
+            // OTP, captcha), where CsrfMiddleware validates against the same
+            // instance value. Without this the client can never learn the
+            // token: the guest cookie is HttpOnly and meta.csrf was empty.
+            if ($isGuestRoute && $ctx->csrf === '') {
+                $ctx->csrf = (string) $this->c->get('guest_csrf');
+            }
+
             // 5. Disabled user.
             if (($r = Middleware::disabledUser($ctx)) !== null) { return $this->finalize($r, $ctx); }
 
@@ -201,7 +213,7 @@ final class Kernel
     }
 
     /**
-     * Render an exception as a JSON envelope or an HTML error page.
+     * Render an exception as a JSON error envelope.
      *
      * @param Throwable         $e       Exception.
      * @param MiddlewareContext $ctx     Context.
@@ -222,53 +234,10 @@ final class Kernel
         }
         $meta = array_merge($ctx->culture->meta(), ['request_id' => $this->c->get('request_id')]);
 
-        if ($ctx->request->isJson() || str_starts_with($ctx->request->path(), '/panel/reports') || str_starts_with($ctx->request->path(), '/panel/api')) {
-            return Response::json(Envelope::error($errors, $meta + ['csrf' => $ctx->csrf]), $desc['status']);
-        }
-
         if ($desc['status'] === 401) {
-            return Response::redirect('/auth/login?expired=1');
+            return Response::json(Envelope::error($errors, $meta + ['csrf' => $ctx->csrf]), 401);
         }
-        if ($desc['status'] === 404) {
-            return Response::html($this->errorPage('404', $ctx->culture->translate('NOT_FOUND', 'Not found'), $desc), 404);
-        }
-        if ($desc['status'] === 403) {
-            return Response::html($this->errorPage('403', $message, $desc), 403);
-        }
-        if ($desc['status'] === 423) {
-            return Response::html($this->errorPage('423', $message, $desc), 423);
-        }
-        return Response::html($this->errorPage((string) $desc['status'], $message, $desc), $desc['status']);
+        return Response::json(Envelope::error($errors, $meta + ['csrf' => $ctx->csrf]), $desc['status']);
     }
 
-    /**
-     * Build a minimal HTML error page.
-     *
-     * @param string $code    HTTP code.
-     * @param string $message Message text.
-     * @param array  $desc    Exception descriptor.
-     * @return string HTML.
-     */
-    private function errorPage(string $code, string $message, array $desc): string
-    {
-        $rid = e((string) $this->c->get('request_id'));
-        $debug = false;
-        try {
-            $debug = (bool) $this->c->get('settings')->get('app.debug', false);
-        } catch (Throwable) {
-        }
-        $extra = '';
-        if ($debug && isset($desc['message'])) {
-            $extra = '<pre dir="ltr" style="text-align:left">' . e((string) $desc['message']) . '</pre>';
-        }
-        return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
-            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            . '<title>' . e($code) . '</title>'
-            . '<style>body{font-family:Vazirmatn,Tahoma,sans-serif;background:#f8fafc;color:#0f172a;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}'
-            . '.box{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;max-width:520px;text-align:center}'
-            . 'h1{font-size:48px;margin:0 0 8px;color:#0f766e}p{color:#475569}</style></head><body><div class="box">'
-            . '<h1>' . e($code) . '</h1><p>' . e($message) . '</p>' . $extra
-            . '<p style="font-size:12px;color:#94a3b8">request id: ' . $rid . '</p>'
-            . '<p><a href="/panel">بازگشت به پنل</a></p></div></body></html>';
-    }
 }

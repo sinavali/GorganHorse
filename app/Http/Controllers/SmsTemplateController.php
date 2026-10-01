@@ -74,10 +74,7 @@ final class SmsTemplateController extends BaseController
         }
 
         $rows = $this->c->get('db')->select('SELECT * FROM sms_templates ORDER BY id DESC');
-        return $this->view('panel/sms-templates', [
-            'rows' => $rows ?: [],
-            'csrf' => $ctx->csrf,
-        ]);
+        return $this->ok(is_array($rows) ? $rows : [], $ctx);
     }
 
     /**
@@ -149,15 +146,17 @@ final class SmsTemplateController extends BaseController
     }
 
     /**
-     * Show SMS log viewer (last 50 with status filter).
+     * SMS delivery log (last 50 with status filter).
      *
      * Route:   GET /panel/sms/log
      * Auth:    role:admin
-     * Returns: HTML
+     * Returns: JSON envelope
      */
     public function log(Request $request, MiddlewareContext $ctx): Response
     {
         $status = (string) ($request->query('status', '') ?: '');
+        $search = trim((string) ($request->query('search', '') ?: ''));
+        $days = (int) ($request->query('days', 0) ?: 0);
         /** @var \App\Bootstrap\Database $logsDb */
         $logsDb = $this->c->get('logs_db');
         $sql = 'SELECT * FROM sms_logs WHERE 1=1';
@@ -166,18 +165,59 @@ final class SmsTemplateController extends BaseController
             $sql .= ' AND status = :s';
             $params['s'] = $status;
         }
+        if ($search !== '') {
+            $sql .= ' AND (recipient LIKE :q OR body LIKE :q OR error LIKE :q)';
+            $params['q'] = '%' . $search . '%';
+        }
+        if ($days > 0) {
+            $sql .= ' AND created_at >= :since';
+            $params['since'] = gmdate('Y-m-d\TH:i:s\Z', time() - ($days * 86400));
+        }
+        /* Delivery report as CSV, honouring the same filters. */
+        if ($request->query('format') === 'csv') {
+            $all = $logsDb->select($sql . ' ORDER BY id DESC LIMIT 20000', $params);
+            $is_array = is_array($all) ? $all : [];
+            $lines = "\xEF\xBB\xBF" . '"شناسه","شماره","وضعیت","پیام","خطا","زمان"' . "\n";
+            foreach ($is_array as $r) {
+                $cells = [
+                    (string) ($r['id'] ?? ''),
+                    (string) ($r['recipient'] ?? ''),
+                    (string) ($r['status'] ?? ''),
+                    (string) ($r['body'] ?? ''),
+                    (string) ($r['error'] ?? ''),
+                    (string) ($r['created_at'] ?? ''),
+                ];
+                $lines .= implode(',', array_map(static fn ($v) => '"' . str_replace('"', '""', $v) . '"', $cells)) . "\n";
+            }
+            $filename = 'sms-delivery-' . gmdate('Ymd-His') . '.csv';
+            $path = BASE_PATH . '/cache/' . $filename;
+            @file_put_contents($path, $lines);
+            return Response::download($path, $filename);
+        }
+
         $sql .= ' ORDER BY id DESC LIMIT 50';
         $rows = $logsDb->select($sql, $params);
         if (!is_array($rows)) { $rows = []; }
 
         $stats = $logsDb->select('SELECT status, COUNT(*) as cnt FROM sms_logs GROUP BY status');
         $stats = is_array($stats) ? $stats : [];
+        $total = 0;
+        foreach ($stats as $s) { $total += (int) ($s['cnt'] ?? 0); }
+        $sent = 0;
+        foreach ($stats as $s) { if (($s['status'] ?? '') === 'sent') { $sent += (int) ($s['cnt'] ?? 0); } }
 
-        return $this->view('panel/sms-log', [
+        return $this->ok([
             'rows' => $rows,
             'status' => $status,
+            'search' => $search,
+            'days' => $days,
             'stats' => $stats,
-            'csrf' => $ctx->csrf,
-        ]);
+            'summary' => [
+                'total' => $total,
+                'sent' => $sent,
+                'failed' => $total - $sent,
+                'success_rate' => $total > 0 ? (int) round(($sent / $total) * 100) : 0,
+            ],
+        ], $ctx);
     }
 }
