@@ -38,6 +38,26 @@ use App\Exceptions\ValidationException;
  */
 final class SignupService
 {
+    /**
+     * Whitelisted ORDER BY expressions for the signup grid. The keys are the
+     * `sortKey` values the SPA sends, and each maps to a select-list alias (or
+     * a real column) of the list query — never raw user input.
+     *
+     * @var array<string,string>
+     */
+    private const SORTABLE = [
+        'id' => 's.id',
+        'rider_name' => 'rider_name',
+        'horse_name' => 'horse_name',
+        'competition_title' => 'competition_title',
+        'rade_name' => 'rade_name',
+        'club_name' => 'club_name',
+        'amount' => 'COALESCE(s.payment_amount_irt_snapshot, 0)',
+        'position' => '(CASE WHEN s.position IS NULL THEN 999999 ELSE s.position END)',
+        'status' => 's.status',
+        'created_at' => 's.created_at',
+    ];
+
     private Database $db;
     private SettingService $settings;
     private LogService $log;
@@ -457,9 +477,11 @@ final class SignupService
      * @param array $actor   Actor.
      * @param int   $page    Page.
      * @param int   $perPage Page size.
+     * @param string $sort    Sort key (whitelisted, see self::SORTABLE).
+     * @param string $dir     'asc' or 'desc'.
      * @return array{rows:array,total:int,page:int,per_page:int}
      */
-    public function list(array $filters, array $actor, int $page = 1, int $perPage = 25): array
+    public function list(array $filters, array $actor, int $page = 1, int $perPage = 25, string $sort = '', string $dir = ''): array
     {
         $where = ['1=1'];
         $params = [];
@@ -513,7 +535,7 @@ final class SignupService
              JOIN horses h ON h.id = s.horse_id
              JOIN users u ON u.id = s.rider_user_id
              LEFT JOIN clubs cl ON cl.id = s.affiliation_club_id
-             WHERE " . $whereSql . ' ORDER BY s.id DESC LIMIT :limit OFFSET :offset',
+             WHERE " . $whereSql . ' ORDER BY ' . self::orderBy($sort, $dir) . ' LIMIT :limit OFFSET :offset',
             $params + ['limit' => $perPage, 'offset' => $offset]
         );
         return ['rows' => $rows, 'total' => $total, 'page' => $page, 'per_page' => $perPage];
@@ -636,6 +658,23 @@ final class SignupService
             $params['r'] = (int) $filters['rider_user_id'];
         }
         return (int) $this->db->scalar('SELECT COUNT(*) FROM signups WHERE ' . implode(' AND ', $where), $params);
+    }
+
+    /**
+     * Translate a client sort request into a safe ORDER BY clause.
+     *
+     * Unknown or missing keys fall back to newest-first, so a hand-crafted
+     * query string can neither inject SQL nor produce an invalid statement.
+     *
+     * @param string $sort Sort key.
+     * @param string $dir  'asc' or 'desc'.
+     * @return string
+     */
+    private static function orderBy(string $sort, string $dir): string
+    {
+        $column = self::SORTABLE[$sort] ?? 's.id';
+        $direction = strtolower($dir) === 'asc' ? 'ASC' : 'DESC';
+        return $column . ' ' . $direction . ', s.id ' . $direction;
     }
 
     /**

@@ -61,6 +61,7 @@ return [
 
     // ---------------- Public shareable competition page ----------------
     ['GET',  '/c/{slug}',             [\App\Http\Controllers\PublicController::class, 'competition'], ['guest']],
+    ['GET',  '/c/{slug}/banner',    [\App\Http\Controllers\PublicController::class, 'banner'], ['guest']],
 
     // ---------------- Payment callbacks (public) ----------------
     ['GET',  '/payment/callback',     [PaymentController::class, 'callback'],  ['guest']],
@@ -182,6 +183,8 @@ return [
     ['POST', '/panel/competitions/{id}/resume', [CompetitionController::class, 'resume'], ['auth', 'role:admin,manager', 'csrf']],
     ['POST', '/panel/competitions/{id}/cancel', [CompetitionController::class, 'cancel'], ['auth', 'role:admin,manager', 'csrf']],
     ['POST', '/panel/competitions/{id}/clone', [CompetitionController::class, 'clone'], ['auth', 'role:admin,manager', 'csrf']],
+    ['POST', '/panel/competitions/{id}/banner', [CompetitionController::class, 'uploadBanner'], ['auth', 'role:admin,manager', 'csrf']],
+    ['DELETE', '/panel/competitions/{id}/banner', [CompetitionController::class, 'clearBanner'], ['auth', 'role:admin,manager', 'csrf']],
     ['POST', '/panel/competitions/{id}/rades', [CompetitionController::class, 'addRade'], ['auth', 'role:admin,manager', 'csrf']],
     ['PUT',  '/panel/competitions/{id}/rades/{comp_rade_id}', [CompetitionController::class, 'updateRade'], ['auth', 'role:admin,manager', 'csrf']],
     ['DELETE', '/panel/competitions/{id}/rades/{comp_rade_id}', [CompetitionController::class, 'removeRade'], ['auth', 'role:admin,manager', 'csrf']],
@@ -281,4 +284,5 @@ return [
 
     // ---------------- Media (authenticated file serving) ----------------
     ['GET',  '/media/{id}',           [\App\Http\Controllers\MediaController::class, 'show'], ['auth']],
+    ['POST', '/panel/media',          [\App\Http\Controllers\MediaController::class, 'store'], ['auth', 'role:admin,manager', 'csrf']],
 ];

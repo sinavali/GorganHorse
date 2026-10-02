@@ -392,6 +392,7 @@ CREATE TABLE IF NOT EXISTS competitions (
     registration_paused   INTEGER NOT NULL DEFAULT 0,       -- 1 = registration paused
     announcement          TEXT,                             -- mandatory announcement shown before signup
     announcement_required INTEGER NOT NULL DEFAULT 0,       -- 1 = rider must tick "read" before signup
+    banner_media_id       INTEGER,                          -- FK media.id (wide hero/banner image)
     status                TEXT NOT NULL DEFAULT 'draft',    -- draft|open|closed|running|finished|cancelled
     results_status        TEXT NOT NULL DEFAULT 'draft',    -- draft | confirmed | published
     results_published_at  TEXT,                             -- UTC of publish
@@ -399,11 +400,13 @@ CREATE TABLE IF NOT EXISTS competitions (
     is_demo               INTEGER NOT NULL DEFAULT 0,       -- 1 = demo seed row
     created_at            TEXT NOT NULL,                    -- UTC creation timestamp
     updated_at            TEXT NOT NULL,                    -- UTC last update timestamp
-    FOREIGN KEY (venue_club_id) REFERENCES clubs(id) ON DELETE SET NULL
+    FOREIGN KEY (venue_club_id) REFERENCES clubs(id) ON DELETE SET NULL,
+    FOREIGN KEY (banner_media_id) REFERENCES media(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_competitions_status ON competitions(status);
 CREATE INDEX IF NOT EXISTS idx_competitions_venue ON competitions(venue_club_id);
 CREATE INDEX IF NOT EXISTS idx_competitions_start ON competitions(start_at);
+CREATE INDEX IF NOT EXISTS idx_competitions_banner ON competitions(banner_media_id);
 
 -- -----------------------------------------------------------------------------
 -- competition_rades

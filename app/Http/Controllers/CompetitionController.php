@@ -145,6 +145,33 @@ final class CompetitionController extends BaseController
     }
 
     /**
+     * Upload or replace the wide banner image of a competition.
+     *
+     * Route:   POST /panel/competitions/{id}/banner
+     * Auth:    role:admin,manager
+     * Body:    multipart/form-data with `file`
+     * Returns: JSON envelope { data: { id, media_id } }
+     */
+    public function uploadBanner(Request $request, MiddlewareContext $ctx): Response
+    {
+        $file = $request->files('file');
+        if (!is_array($file)) { return $this->fail('VALIDATION_FAILED', 'No file uploaded', $ctx, 422, 'file'); }
+        return $this->ok($this->c->get('competitions')->setBanner((int) $request->attr('id'), $file, $ctx->actor()), $ctx, 201);
+    }
+
+    /**
+     * Remove the banner image of a competition.
+     *
+     * Route:   DELETE /panel/competitions/{id}/banner
+     * Auth:    role:admin,manager
+     * Returns: JSON envelope { data: { id, banner: null } }
+     */
+    public function clearBanner(Request $request, MiddlewareContext $ctx): Response
+    {
+        return $this->ok($this->c->get('competitions')->clearBanner((int) $request->attr('id'), $ctx->actor()), $ctx);
+    }
+
+    /**
      * Add a rade to a competition.
      *
      * Route:   POST /panel/competitions/{id}/rades

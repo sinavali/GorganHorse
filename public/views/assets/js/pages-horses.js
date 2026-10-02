@@ -119,14 +119,14 @@ function horseCols(){
     {label:'نژاد',key:'race',sortKey:'race'},
     {label:'رنگ',key:'color',sortKey:'color'},
     {label:'ریزتراشه',sortKey:'microchip_number',render:function(r){return '<span class="ltr i12">'+UI.esc(r.microchip_number||'—')+'</span>';}},
-    {label:'مالک',key:'owner_name',sortKey:'owner_name'},
+    {label:'مالک',key:'owner_name',sortKey:'owner_name',render:function(r){return r.owner_user_id?'<a href="/users/'+r.owner_user_id+'" class="b i13">'+UI.esc(r.owner_name||'—')+'</a>':UI.esc(r.owner_name||'—');}},
     {label:'وضعیت',sortKey:'status',render:function(r){return UI.badge(r.status)+(Number(r.transfer_locked)?' <span class="badge b-warn">در انتقال</span>':'');}}
   ];
 }
 Pages.horses={
   title:'اسب‌ها',icon:'i-horse',sec:'عملیات',
   render:function(root,ctx){
-    var filters=App.seed({status:'',search:'',microchip:'',page:1});
+    var filters=App.seed({status:'',search:'',microchip:'',gender:'',race:'',color:'',owner_user_id:'',per_page:50,page:1});
     var staff=isStaff(ctx);
     root.innerHTML=pageHead('اسب‌ها','دفتر نژاد اسب‌های ثبت‌شده.',
       (staff?'<div class="row gap1" id="bkBar" style="display:none">'
@@ -149,7 +149,15 @@ Pages.horses={
       views:'horses',
       searchLabel:'جستجوی نام اسب…',
       selects:[
-        {key:'status',label:'وضعیت',options:[{v:'',l:'همه وضعیت‌ها'}].concat(STATUSES)}
+        {key:'status',label:'وضعیت',options:[{v:'',l:'همه وضعیت‌ها'}].concat(STATUSES)},
+        /* The list endpoint already supported gender / race / color /
+           owner_user_id — the grid just never exposed them. Lookups come from
+           the controlled vocabulary, so a renamed breed shows its new name. */
+        {key:'gender',label:'جنسیت',lazy:UI.spkFromApi('/panel/lookups/genders','name')},
+        {key:'race',label:'نژاد',lazy:UI.spkFromApi('/panel/lookups/races','name')},
+        {key:'color',label:'رنگ',lazy:UI.spkFromApi('/panel/lookups/colors','name')},
+        {key:'owner_user_id',label:'مالک',lazy:UI.spkFromApi('/panel/users',function(u){return (u.first_name||'')+' '+(u.last_name||'');},{role:'rider'})},
+        {key:'per_page',label:'در هر صفحه',options:[{v:'25',l:'۲۵ ردیف'},{v:'50',l:'۵۰ ردیف'},{v:'100',l:'۱۰۰ ردیف'}]}
       ],
       onChange:function(){filters.page=1;App.setQuery(filters);load();}
     });
@@ -181,20 +189,21 @@ Pages.horses={
         var rows=UI.sortRows(UI.rows(d),HCOLS,filters.sort);
         fbar.setCount(UI.faNum(d.total||rows.length)+' اسب');
         var cols=HCOLS.slice();
-        if(staff){cols=[{label:'<input type="checkbox" id="selAllH"/>',raw:true,render:function(r){return '<input type="checkbox" class="selrow" data-id="'+r.id+'"/>';}}].concat(cols);}
-        cols.push({label:'عملیات',render:function(r){return '<div class="row gap1">'
+        if(staff){cols=[{label:'<input type="checkbox" id="selAllH"/>',raw:true,noPrint:true,render:function(r){return '<input type="checkbox" class="selrow" data-id="'+r.id+'"/>';}}].concat(cols);}
+        cols.push({label:'عملیات',noPrint:true,render:function(r){return '<div class="row gap1">'
           +'<button class="btn-i" data-edit="'+r.id+'" title="ویرایش">'+UI.ic('i-edit')+'</button>'
           +(staff&&r.status==='soft_deleted'?'<button class="btn btn-s btn-sm" data-rest="'+r.id+'">بازگردانی</button>':'')
           +'<button class="btn-i" data-del="'+r.id+'" title="حذف">'+UI.ic('i-trash')+'</button></div>';}});
         root.querySelector('#tbl').innerHTML=UI.table(cols,rows,{
           rowHref:function(r){return '/horses/'+r.id;},
-          pager:UI.pagerHtml(d.total||rows.length,filters.page,50),
+          pager:UI.pagerHtml(d.total||rows.length,filters.page,+(filters.per_page||50)),
           sort:filters.sort,
           emptyText:fbar.hasFilters()?'با فیلترهای فعلی اسبی یافت نشد':'اسبی ثبت نشده',
           emptyAction:fbar.hasFilters()?fbar.clearAction:''
         });
         UI.bindSorting(root,filters,function(key,dir){
           filters.sort={key:key,dir:dir};
+          filters.page=1;
           App.setQuery(filters);
           load();
         });
@@ -274,12 +283,13 @@ Pages.horseDetail={
         +'<button class="btn btn-g btn-sm" id="share">'+UI.ic('i-users')+' اشتراک</button>'
         +'<button class="btn btn-g btn-sm" id="transfer">'+UI.ic('i-swap')+' انتقال مالکیت</button>'
         +'<button class="btn btn-g btn-sm" id="sold">'+UI.ic('i-bag')+' فروش به غیرسوارکار</button>'
-        +'<label class="btn btn-g btn-sm">'+UI.ic('i-plus')+' تصویر<input type="file" accept="image/*" hidden id="addImg"/></label>'
         +'</div>';
       root.innerHTML=pageHead(h.name,(h.race||'')+' · '+UI.badge(h.status),actions)
         +'<div class="grid main31 mt4"><div>'
         +'<div class="panel pad">'+detail([
-          ['مالک',h.owner_name||('#'+UI.faNum(h.owner_user_id))],
+          ['مالک',h.owner_user_id
+            ?'<a class="b i13" href="/users/'+h.owner_user_id+'">'+(h.owner_name?UI.esc(h.owner_name):'#'+UI.faNum(h.owner_user_id))+'</a>'
+            :(h.owner_name||('#'+UI.faNum(h.owner_user_id)))],
           ['جنسیت',h.gender],['نژاد',h.race],['رنگ',h.color],
           ['تولد',h.birth_date?I18N.fmtDate(h.birth_date):'—'],
           ['ریزتراشه','<span class="ltr">'+UI.esc(h.microchip_number||'—')+'</span>'],
@@ -288,28 +298,47 @@ Pages.horseDetail={
           ['پدر',h.sire_name],['مادر',h.dam_name],['پرورش‌دهنده',h.breeder],
           ['توضیحات',h.notes]
         ])+'</div>'
-        +section('تصاویر ('+UI.faNum(images.length)+')','<div class="imgrow">'+images.map(function(im){
-          return '<div class="imgc"><img src="'+UI.esc(mediaUrl(im))+'" alt=""/><button class="del" data-delimg="'+im.id+'">'+UI.ic('i-x')+'</button></div>';
-        }).join('')+(images.length?'':'<div class="empty" style="padding:20px">تصویری نیست</div>')+'</div>')
+        +section('گالری تصاویر ('+UI.faNum(images.length)+')',galleryHtml(images))
         +section('سابقه مسابقات',historyTable(history))
         +section('سوابق بهداشتی و واکسیناسیون','<div id="healthHost"></div>',
           staff?'<button class="btn btn-s btn-sm" data-hadd>'+UI.ic('i-plus')+' رکورد جدید</button>':'')
         +'</div><div>'
         +section('اشتراک‌ها',shareList(shares))
         +section('انتقال‌ها',transferList(transfers))
-        +section('کد اشتراک‌گذاری','<div class="row gap2"><span class="kbd ltr" style="font-size:15px">'+UI.esc(h.share_code||'—')+'</span><span class="i11 mut">این کد را به سوارکار مقصد بدهید.</span></div>')
+        +section('کد اشتراک‌گذاری','<div class="row gap2 wrap">'+UI.secret(h.share_code)
+          +'<span class="i11 mut">این کد محرمانه است و در چاپ یا خروجی CSV نمایش داده نمی‌شود.</span></div>')
         +'</div></div>';
 
       function refresh(){Pages.horseDetail.render(root,ctx,id);}
       document.getElementById('edit').addEventListener('click',function(){openHorseDialog(h,ctx,refresh);});
+      /* healthSection() was never called, so #healthHost stayed an empty div
+         and the "new record" button had no listener at all. */
+      healthSection(id,staff);
+      UI.bindSecrets(root);
       document.getElementById('addImg').addEventListener('change',function(e){
-        var f=e.target.files[0];
-        if(!f){return;}
-        API.upload('/panel/horses/'+id+'/images',f).then(function(){UI.toast('تصویر افزوده شد');refresh();})
-          .catch(function(err){UI.toast((err.errors&&err.errors[0].message)||'خطا در بارگذاری','e');});
+        var files=Array.prototype.slice.call(e.target.files||[]).slice(0,Math.max(0,HORSE_MAX_IMAGES-images.length));
+        if(!files.length){return;}
+        var doneN=0;
+        files.reduce(function(chain,f){
+          return chain.then(function(){
+            return API.upload('/panel/horses/'+id+'/images',f)
+              .then(function(){doneN++;}
+              ,function(err){UI.toast((err.errors&&err.errors[0].message)||'خطا در بارگذاری','e');});
+          });
+        },Promise.resolve()).then(function(){
+          if(doneN){UI.toast(UI.faNum(doneN)+' تصویر افزوده شد');}
+          refresh();
+        });
+      });
+      var galUrls=images.map(mediaUrl);
+      root.querySelectorAll('[data-zoom]').forEach(function(b){
+        b.addEventListener('click',function(){openLightbox(galUrls,+b.dataset.zoom);});
       });
       root.querySelectorAll('[data-delimg]').forEach(function(b){
-        b.addEventListener('click',function(){API.del('/panel/horses/'+id+'/images/'+b.dataset.delimg).then(refresh);});
+        b.addEventListener('click',function(e){
+          e.stopPropagation();
+          UI.confirm('این تصویر حذف شود؟',function(){API.del('/panel/horses/'+id+'/images/'+b.dataset.delimg).then(refresh);});
+        });
       });
       root.querySelectorAll('[data-revshare]').forEach(function(b){
         b.addEventListener('click',function(){UI.confirm('این اشتراک لغو شود؟',function(){API.del('/panel/horses/'+id+'/share/'+b.dataset.revshare).then(refresh);});});
@@ -331,13 +360,74 @@ Pages.horseDetail={
       document.getElementById('transfer').addEventListener('click',function(){openTransferDialog(h,transfers,refresh,ctx);});
     });
 
-    function historyTable(rows){
+    /* Horse gallery. The backend caps a horse at `horses.max_images` (default 5)
+   and returns them in sort_order, so the first tile is the cover photo. */
+var HORSE_MAX_IMAGES=5;
+function galleryHtml(images){
+  var n=images.length;
+  var full=n>=HORSE_MAX_IMAGES;
+  var cells=(images||[]).map(function(im,i){
+    var url=mediaUrl(im);
+    return '<div class="gcell">'
+      +'<button class="gzoom" data-zoom="'+i+'" aria-label="نمایش تصویر '+UI.faNum(i+1)+'">'
+      +'<img src="'+UI.esc(url)+'" alt="تصویر '+UI.faNum(i+1)+' از '+UI.faNum(n)+'"/></button>'
+      +(i===0?'<span class="gcover">تصویر اصلی</span>':'')
+      +'<span class="gnum">'+UI.faNum(i+1)+'</span>'
+      +'<button class="gdel" data-delimg="'+im.id+'" title="حذف تصویر">'+UI.ic('i-x')+'</button>'
+      +'</div>';
+  }).join('');
+  return '<div class="gallery">'+cells
+    +(full?'':'<label class="gadd" for="addImg">'+UI.ic('i-plus')+'<span>افزودن تصویر</span></label>')
+    +(n?'':'<div class="empty" style="grid-column:1/-1;padding:26px 10px">'+UI.ic('i-image','')+'<div>هنوز تصویری ثبت نشده است</div></div>')
+    +'</div>'
+    +'<div class="gal-foot"><span class="i12 mut">'+UI.faNum(n)+' از '+UI.faNum(HORSE_MAX_IMAGES)+' تصویر'
+    +(full?' — سقف تصاویر پر شده است':' — تصویر اول به‌عنوان تصویر اصلی نمایش داده می‌شود')+'</span>'
+    +'<input type="file" accept="image/*" multiple hidden id="addImg"/></div>';
+}
+
+/* Full-screen lightbox with keyboard + backdrop dismissal. */
+function openLightbox(urls,start){
+  var i=Math.max(0,Math.min(urls.length-1,start||0));
+  var box=UI.el('<div class="lb" role="dialog" aria-modal="true" aria-label="نمایش تصویر">'
+    +'<img alt=""/>'
+    +'<div class="lb-bar">'
+    +'<button data-prev aria-label="قبلی">&#8250;</button>'
+    +'<span data-lbnum></span>'
+    +'<button data-next aria-label="بعدی">&#8249;</button>'
+    +'<button data-close aria-label="بستن">'+UI.ic('i-x')+'</button>'
+    +'</div></div>');
+  function draw(){
+    var img=box.querySelector('img');
+    img.src=urls[i];
+    img.alt='تصویر '+UI.faNum(i+1)+' از '+UI.faNum(urls.length);
+    box.querySelector('[data-lbnum]').textContent=UI.faNum(i+1)+' / '+UI.faNum(urls.length);
+    box.querySelector('[data-prev]').disabled=i<=0;
+    box.querySelector('[data-next]').disabled=i>=urls.length-1;
+  }
+  function step(d){if(i+d<0||i+d>urls.length-1){return;}i+=d;draw();}
+  box.querySelector('[data-prev]').addEventListener('click',function(){step(-1);});
+  box.querySelector('[data-next]').addEventListener('click',function(){step(1);});
+  box.querySelector('[data-close]').addEventListener('click',function(){box.remove();document.removeEventListener('keydown',onKey);});
+  box.addEventListener('click',function(e){if(e.target===box){box.remove();document.removeEventListener('keydown',onKey);}});
+  /* RTL: ArrowRight moves towards the previous image. */
+  function onKey(e){
+    if(e.key==='Escape'){box.remove();document.removeEventListener('keydown',onKey);}
+    else if(e.key==='ArrowLeft'){step(1);}
+    else if(e.key==='ArrowRight'){step(-1);}
+  }
+  document.addEventListener('keydown',onKey);
+  document.body.appendChild(box);
+  draw();
+}
+
+function historyTable(rows){
       return UI.table([
-        {label:'مسابقه',key:'competition_title',wrap:true},
+        {label:'مسابقه',key:'competition_title',wrap:true,
+          render:function(r){return r.competition_id?'<a href="/competitions/'+r.competition_id+'" class="wrap">'+UI.esc(r.competition_title||'—')+'</a>':UI.esc(r.competition_title||'—');}},
         {label:'رده',key:'rade_name'},
         {label:'تاریخ',render:function(r){return I18N.fmtDate(r.created_at);}},
         {label:'مقام',render:function(r){return r.position!=null?UI.faNum(r.position)+(Number(r.is_winner)?' '+UI.ic('i-star'):''):'—';}}
-      ],rows||[],{emptyText:'سابقه‌ای ثبت نشده'});
+      ],rows||[],{rowHref:function(r){return r.competition_id?'/competitions/'+r.competition_id:'';},emptyText:'سابقه‌ای ثبت نشده'});
     }
     function shareList(rows){
       return UI.table([
@@ -437,7 +527,7 @@ function healthSection(horseId,staff){
               +'<button class="btn-i" data-hdel="'+r.id+'" title="حذف">'+UI.ic('i-trash')+'</button></div>'
             :'';}}
         ],rows,{emptyText:'رکورد بهداشتی ثبت نشده'})
-      : '<div class="empty">'+UI.ic('i-shield')+'<div>رکورد بهداشتی ثبت نشده</div></div>';
+      : '<div class="empty">'+UI.ic('i-file')+'<div>رکورد بهداشتی ثبت نشده</div></div>';
 
     host.querySelectorAll('[data-hedit]').forEach(function(b){
       b.addEventListener('click',function(){
@@ -453,7 +543,9 @@ function healthSection(horseId,staff){
     });
   }
   function reload(){
-    API.get('/panel/horses/'+horseId+'/health').then(function(d){paintUI.rows(d);});
+    /* Was `paintUI.rows(d)` — parsed as paint.UI.rows(d), so every reload
+       threw and the health table never rendered. */
+    API.get('/panel/horses/'+horseId+'/health').then(function(d){paint(UI.rows(d));});
   }
   reload();
   host.addEventListener('click',function(e){

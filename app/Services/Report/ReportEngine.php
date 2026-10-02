@@ -162,18 +162,33 @@ final class ReportEngine
      */
     public function toCsv(array $payload): string
     {
+        /* Never let a share code leave through a report export: the codes are
+           secrets that authorise handing a horse to someone else, and a CSV is
+           forwarded by email far more freely than the panel is. */
         $keys = array_map(static fn (array $c): string => (string) $c['key'], $payload['columns']);
         $labels = array_map(static fn (array $c): string => (string) $c['label'], $payload['columns']);
         $out = "\xEF\xBB\xBF" . implode(',', array_map(static fn ($l) => '"' . str_replace('"', '""', $l) . '"', $labels)) . "\n";
         foreach ($payload['rows'] as $row) {
             $line = [];
             foreach ($keys as $k) {
-                $cell = $this->culture->exportCell($row[$k] ?? '');
+                $raw = $row[$k] ?? '';
+                $cell = self::isSecretColumn($k) ? '' : $this->culture->exportCell($raw);
                 $line[] = '"' . str_replace('"', '""', $cell) . '"';
             }
             $out .= implode(',', $line) . "\n";
         }
         return $out;
+    }
+
+    /**
+     * Is this column a share code (a secret that must never be exported)?
+     *
+     * @param string $key Column key.
+     * @return bool
+     */
+    public static function isSecretColumn(string $key): bool
+    {
+        return (bool) preg_match('/(^|[._])(my_)?share_?code$/i', str_replace(['-', ' '], '_', trim($key)));
     }
 
     /**

@@ -30,10 +30,10 @@ use DOMNode;
 final class HtmlSanitizer
 {
     /** @var string[] Allowed HTML tags. */
-    private const ALLOWED_TAGS = ['p','br','strong','b','em','i','u','s','ul','ol','li','a','blockquote','code','pre','h1','h2','h3','h4','h5','h6','table','thead','tbody','tr','th','td','span','div','hr','img'];
+    private const ALLOWED_TAGS = ['p','br','strong','b','em','i','u','s','sub','sup','mark','ul','ol','li','a','blockquote','code','pre','h1','h2','h3','h4','h5','h6','table','thead','tbody','tr','th','td','span','div','hr','img','figure','figcaption'];
 
     /** @var string[] Allowed attributes per any tag. */
-    private const ALLOWED_ATTRS = ['href','title','alt','src','class','colspan','rowspan','dir','lang'];
+    private const ALLOWED_ATTRS = ['href','title','alt','src','width','height','class','colspan','rowspan','dir','lang'];
 
     /** @var string[] Allowed SVG tags. */
     private const ALLOWED_SVG = ['svg','g','path','rect','circle','ellipse','line','polyline','polygon','text','tspan','defs','linearGradient','radialGradient','stop','clipPath','use','title','desc'];

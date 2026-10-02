@@ -263,7 +263,7 @@ Pages.profile={
           +'</div></div>':'')
         +'<button class="btn btn-p mt4">ذخیره تغییرات</button></form></div>'
         +'<div>'
-        +(isRider?'<div class="panel pad mb4"><b class="i13">کد اشتراک‌گذاری اسب</b><div class="row gap2 mt3"><span class="kbd ltr" style="font-size:16px">'+UI.esc(rp.my_share_code||'—')+'</span><button class="btn btn-g btn-sm" id="cpShare">کپی</button></div><p class="hint">این کد ۶ رقمی را در اختیار مالکان اسب قرار دهید تا اسب خود را با شما به اشتراک بگذارند.</p></div>':'')
+        +(isRider?'<div class="panel pad mb4 secret"><b class="i13">کد اشتراک‌گذاری اسب</b><div class="row gap2 mt3 wrap">'+UI.secret(rp.my_share_code)+'</div><p class="hint">این کد ۶ رقمی را در اختیار مالکان اسب قرار دهید تا اسب خود را با شما به اشتراک بگذارند. این کد محرمانه است و در چاپ صفحه یا خروجی‌ها نمایش داده نمی‌شود.</p></div>':'')
         +(u.role==='club'&&u.club?'<div class="panel pad mb4"><b class="i13">باشگاه من</b><div class="mt3"><a class="btn btn-g btn-sm" href="/clubs/'+u.club.id+'">'+UI.esc(u.club.name)+'</a></div></div>':'')
         +'<div class="panel pad mb4"><b class="i13">تغییر گذرواژه</b><form id="fPass" class="mt3">'
         +UI.inp('current_password','گذرواژه فعلی','','password',{req:true})
@@ -273,10 +273,7 @@ Pages.profile={
         +'</div></div>';
       var f=document.getElementById('fProf');
       f.querySelectorAll('[data-date]').forEach(function(i){UI.attachDatepicker(i);});
-      var cp=document.getElementById('cpShare');
-      if(cp){cp.addEventListener('click',function(){
-        try{navigator.clipboard.writeText(String(rp.my_share_code||''));UI.toast('کد کپی شد');}catch(e){UI.toast('کپی نشد — کد را دستی یادداشت کنید','w');}
-      });}
+      UI.bindSecrets(root);
       f.addEventListener('submit',function(e){
         e.preventDefault();
         var v=UI.formValues(f);
@@ -557,7 +554,7 @@ Pages.userDetail={
           ['عضویت',I18N.fmtDate(u.created_at)]
         ])
         +(u.role==='rider'?'<div class="mt4"><b class="i13">اطلاعات سوارکار</b>'+detail([
-          ['کد اشتراک اسب','<span class="kbd ltr">'+UI.esc(rp.my_share_code||'—')+'</span>'],
+          ['کد اشتراک اسب','<span class="secret">'+UI.secret(rp.my_share_code)+'</span>'],
           ['شماره بیمه','<span class="ltr">'+UI.esc(rp.insurance_number||'—')+'</span>'],
           ['جنسیت',rp.gender||'—'],
           ['تولد',rp.birth_date?I18N.fmtDate(rp.birth_date):'—'],
@@ -566,9 +563,15 @@ Pages.userDetail={
         ])+'</div>':'')
         +(u.role==='club'&&u.club?'<div class="mt4"><b class="i13">باشگاه</b><div class="mt2"><a class="btn btn-g btn-sm" href="/clubs/'+u.club.id+'">'+UI.esc(u.club.name)+'</a></div></div>':'')
         +'</div>'
-        +'<div><div class="panel pad"><b class="i13">اسب‌های این کاربر</b>'+UI.table([{label:'نام',key:'name'},{label:'ریزتراشه',key:'microchip_number'},{label:'وضعیت',render:function(r){return UI.badge(r.status);}}],horses,{emptyText:'اسبی ندارد'})+'</div></div></div>'
+        +'<div><div class="panel pad"><b class="i13">اسب‌های این کاربر</b>'
+        +UI.table([
+          {label:'نام',key:'name',render:function(r){return '<a class="b i13" href="/horses/'+r.id+'">'+UI.esc(r.name||'—')+'</a>';}},
+          {label:'ریزتراشه',key:'microchip_number'},
+          {label:'وضعیت',render:function(r){return UI.badge(r.status);}}
+        ],horses,{rowHref:function(r){return '/horses/'+r.id;},emptyText:'اسبی ندارد'})+'</div></div></div>'
         +acts;
       function refresh(){Pages.userDetail.render(root,ctx,id);}
+      UI.bindSecrets(root);
       var ed=document.getElementById('udEdit');
       if(ed){ed.addEventListener('click',function(){
         if(Pages.users&&Pages.users.openEditor){Pages.users.openEditor(id,refresh);}

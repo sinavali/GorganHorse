@@ -29,6 +29,38 @@ use App\Http\MiddlewareContext;
 final class MediaController extends BaseController
 {
     /**
+     /**
+     * Upload an image used inside a rich-text field.
+     *
+     * Route:   POST /panel/media
+     * Auth:    role:admin,manager
+     * Body:    multipart/form-data with `file`
+     * Returns: JSON envelope { data: { id, url } }
+     *
+     * Purpose: the content editor lets staff drag an image straight onto the
+     * page. There is no per-entity endpoint that fits a description body, so
+     * this stores the file and hands back the authenticated URL the editor
+     * embeds. Images referenced from content are served through the same
+     * authenticated `GET /media/{id}` route as every other upload.
+     */
+    public function store(Request $request, MiddlewareContext $ctx): Response
+    {
+        $file = $request->files('file');
+        if (!is_array($file)) { return $this->fail('VALIDATION_FAILED', 'No file uploaded', $ctx, 422, 'file'); }
+        $stored = $this->c->get('media')->store($file, 'editor', (int) $ctx->actor()['id'], 'editor');
+        if (!str_starts_with((string) $stored['mime'], 'image/')) {
+            $this->c->get('media')->delete((int) $stored['id']);
+            return $this->fail('VALIDATION_FAILED', 'Only images can be embedded in rich text', $ctx, 422, 'file');
+        }
+        return $this->ok([
+            'id' => (int) $stored['id'],
+            'url' => '/media/' . (int) $stored['id'],
+            'width' => $stored['width'],
+            'height' => $stored['height'],
+        ], $ctx, 201);
+    }
+
+    /**
      * Stream a media file by id.
      *
      * Route:   GET /media/{id}

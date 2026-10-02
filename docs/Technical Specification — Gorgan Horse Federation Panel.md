@@ -73,16 +73,21 @@ Audience: implementers, reviewers, maintainers.
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Base | Server-rendered PHP templates | RTL-first |
-| Interactivity | Alpine.js 3 (vendored) | ~15 KB |
-| CSS | Tailwind CSS (built once, committed) | Logical properties |
-| Grid | AG Grid Community (vendored) | Server-side row model contract |
-| Exports | SheetJS (vendored) | XLSX + CSV |
-| QR | qrcode.js (vendored) | Client-side generation |
-| Fonts | Vazirmatn (self-hosted) | Persian |
-| Icons | Inline SVG | No icon font |
+| Base | No-build SPA in `public/views/` | Plain JS + hand-written CSS, RTL-first |
+| Interactivity | Vanilla JS (`ui.js` kit) | No framework |
+| CSS | Hand-written design system (`assets/css/app.css`) | CSS variables, logical properties, dark mode, `@media print` |
+| Grid | `UI.table` + server-side sort/paging | Same `{rows,total,page,per_page}` contract as AG Grid's row model |
+| Exports | Server-side CSV writer (`ReportEngine`) | No client-side spreadsheet library |
+| QR | Server-rendered SVG (`QrCodeService`) | No client library |
+| Rich text | Quill 2.0.3 (vendored, lazily loaded) | Only vendored front-end library |
+| Fonts | Vazirmatn (self-hosted, vendored) | Persian |
+| Icons | Inline SVG sprite | No icon font |
 
-**No build step required at runtime.** Tailwind is built during development and the output is committed. If the developer wishes to rebuild, `npx tailwindcss` is used locally only.
+**No build step, no npm, no bundler — at development time or at runtime.** Nothing in
+the repository is compiled: `public/views/` ships exactly what the browser loads. This
+replaces the originally specified Alpine.js + Tailwind + AG Grid + SheetJS + qrcode.js
+chain, each of which would have required a registry or a build pipeline. See §33.2 for
+the as-built front end.
 
 ### 2.3 Vendored libraries (PHP)
 
@@ -778,7 +783,7 @@ interface ReportInterface {
 
 - `POST /panel/reports/export` returns a signed URL.
 - Signed URL: `GET /panel/reports/download/{token}` where token is HMAC-signed and expires in 1 hour.
-- Format: XLSX (via SheetJS on frontend) or CSV (server-generated).
+- Format: CSV (server-generated, BOM-prefixed, culture-aware). XLSX is not produced.
 
 ### 18.6 Grid state persistence
 
@@ -1064,36 +1069,37 @@ JSON lines, one event per line:
 
 ### 26.1 Philosophy
 
-- Server-rendered PHP templates.
-- Alpine.js for local interactivity.
-- AG Grid for large data.
-- No SPA.
-- No build step at runtime.
+- One HTML shell (`public/views/index.html`) plus a router in `app.js`.
+- Pages are modules (`pages-*.js`) that render into the shell.
+- Vanilla JS; no framework, no bundler, no build step.
+- Server-rendered HTML only where it must work without JavaScript: the public
+  competition page (`GET /c/{slug}`) and the server-rendered print blocks.
 
 ### 26.2 Template structure
 
-- `app/Views/layouts/panel.php` — panel chrome.
-- `app/Views/layouts/auth.php` — auth chrome.
-- `app/Views/layouts/print.php` — print chrome.
-- `app/Views/partials/*` — shared fragments.
-- `app/Views/panel/*` — per-page templates.
-- `app/Views/auth/*` — auth pages.
-- `app/Views/print/*` — print templates.
-- `app/Views/errors/*` — error pages.
+- `public/views/index.html` — the single SPA shell (panel chrome, `<head>`, toasts, modals).
+- `public/views/assets/js/ui.js` — the shared kit every page is built from.
+- `public/views/assets/js/pages-*.js` — one module per area of the panel.
+- `app/Http/Controllers/*` — the JSON API behind those modules.
+- `app/Http/Controllers/PublicController.php` — the server-rendered public page.
 
 ### 26.3 CSS
 
-- Tailwind CSS, built and committed.
-- `print.css` for A4 print styles.
-- Logical properties everywhere.
-- Vazirmatn font self-hosted.
+- `public/views/assets/css/app.css` — the design system (CSS variables, RTL logical
+  properties, dark mode, tables, modals, the Quill theme, and one `@media print` block
+  that turns any page into an A4 document).
+- `public/views/assets/css/public.css` — the public competition page.
+- Vazirmatn self-hosted from `public/views/assets/fonts/`.
 
 ### 26.4 JS
 
-- `app.js` — Alpine bootstrap, tooltip helpers, CSRF injection, form helpers.
-- `grid.js` — AG Grid wrapper with server-side row model.
-- `qr.js` — QR generator.
-- Alpine components are declared inline in templates.
+- `i18n.js` — Jalali calendar, Persian digits, money/date formatting.
+- `api.js` — JSON API client: envelope handling, CSRF echo, uploads, downloads.
+- `ui.js` — the kit: icons, toasts, modals, tables, forms, datepicker, charts, the rich
+  text editor (`ensureQuill()`, `edtToolbar()`), print preparation.
+- `auth.js` — login/OTP/signup/forgot and the first-run installer wizard.
+- `pages-*.js` — one module per area (core, horses, events, finance, system).
+- `app.js` — shell, History-API router, role-aware navigation; loads last.
 
 ### 26.5 Grid contract
 
@@ -1332,16 +1338,27 @@ Every controller method documents:
 
 ### 33.2 Frontend
 
-| Library | Purpose | Notes |
-|---|---|---|
-| Alpine.js 3 | Interactivity | Vendored |
-| AG Grid Community | Data grid | Vendored |
-| SheetJS | XLSX export | Vendored |
-| qrcode.js | QR generation | Vendored |
-| Vazirmatn | Persian font | Self-hosted |
-| Tailwind CSS | Styling | Built output committed |
+The panel frontend is a self-contained, dependency-light SPA under `public/views/`:
+plain ES5-compatible JavaScript and hand-written CSS, with **no build step, no npm
+and no bundler**. Only two third-party assets are actually vendored:
 
-All libraries are vendored as plain files under `vendor/` (PHP) or `public/assets/js/vendor/` (JS). No CDN at runtime.
+| Asset | Purpose | Location | Notes |
+|---|---|---|---|
+| Quill Editor 2.0.3 | Rich-text content editor | `public/views/assets/vendor/quill.js` | UMD, BSD-3-Clause, ~209 KB. Loaded **lazily** by `ui.js` (`ensureQuill()`) the first time a rich-text field is initialised, so pages with no editor never download it. Used by the competition description / rules / announcement fields. Its CSS is deliberately **not** vendored — `quill.snow.css` is LTR-first — so a small RTL theme under `.ql-` selectors in `app.css` applies the panel's design tokens. |
+| Vazirmatn | Persian font | `public/views/assets/fonts/vazirmatn-{arabic,latin}-var.woff2` | Variable weight 100–900, SIL OFL 1.1, two `unicode-range` subsets (~80 KB together), `font-display:swap`. Preloaded from `public/views/index.html` and the public-page layout. |
+
+Everything else — routing, tables, pickers, modals, charts, the date picker, the rich
+editor fallback — is first-party code in `public/views/assets/js/` and
+`public/views/assets/css/`.
+
+Both vendored directories carry a `README.md` recording provenance and licence, and
+`tests/Unit/FrontendContractTest.php::vendoredAssets()` asserts the files are present,
+parseable (`node --check`), a plausible size, and carry a real `woff2` magic number and
+licence file — they are fetched by the browser at runtime, so no PHP or Node test would
+otherwise notice a truncated download.
+
+All libraries are vendored as plain files — PHP under `vendor/`, JS and fonts under
+`public/views/assets/vendor/` and `public/views/assets/fonts/`. **No CDN at runtime.**
 
 ---
 
@@ -1351,7 +1368,8 @@ All libraries are vendored as plain files under `vendor/` (PHP) or `public/asset
 
 - Copy the entire project folder.
 - Exclude `cache/*` and `database/*.sqlite` if starting fresh.
-- Include `vendor/`, `public/assets/`.
+- Include `vendor/`, `public/` (which carries `public/views/assets/vendor/` and
+  `public/views/assets/fonts/`), and `uploads/`.
 
 ### 34.2 Apache
 

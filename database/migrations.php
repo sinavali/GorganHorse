@@ -64,6 +64,13 @@ $mainMigrations = [
         $db->execute('CREATE INDEX IF NOT EXISTS idx_horse_health_horse ON horse_health_records(horse_id)');
         $db->execute('CREATE INDEX IF NOT EXISTS idx_horse_health_due ON horse_health_records(next_due_at)');
     },
+    'competitions.banner_media_id' => static function ($db): void {
+        $cols = array_column($db->select('PRAGMA table_info(competitions)'), 'name');
+        if (!in_array('banner_media_id', $cols, true)) {
+            $db->execute('ALTER TABLE competitions ADD COLUMN banner_media_id INTEGER');
+            $db->execute('CREATE INDEX IF NOT EXISTS idx_competitions_banner ON competitions(banner_media_id)');
+        }
+    },
     'competitions.announcement' => static function ($db): void {
         $cols = array_column($db->select('PRAGMA table_info(competitions)'), 'name');
         if (!in_array('announcement', $cols, true)) {

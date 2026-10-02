@@ -153,8 +153,7 @@ function drawNav(){
   function flush(){
     if(!current){return;}
     var open=collapsed.indexOf(current)<0;
-    html+='<button class="nsec" data-sec="'+UI.esc(current)+'" aria-expanded="'+open+'"'
-      +(open?'':' aria-expanded="false"')+'>'
+    html+='<button class="nsec" data-sec="'+UI.esc(current)+'" aria-expanded="'+(open?'true':'false')+'">'
       +'<span>'+UI.esc(current)+'</span>'+UI.ic('i-cr')+'</button>'
       +'<div class="nsec-items"'+(open?'':' hidden')+'>'+buf.join('')+'</div>';
     buf=[];
@@ -183,9 +182,13 @@ function drawNav(){
     b.addEventListener('click',function(){
       var itemsBox=b.nextElementSibling;
       if(!itemsBox){return;}
-      var open=itemsBox.hasAttribute('hidden');
-      if(open){itemsBox.removeAttribute('hidden');}else{itemsBox.setAttribute('hidden','');}
+      /* State lives on aria-expanded only: .nsec-items carries a `display`
+         declaration, which overrides the UA [hidden] rule, so toggling the
+         attribute alone was invisible. Both are written so the visual and the
+         DOM always agree. */
+      var open=b.getAttribute('aria-expanded')!=='true';
       b.setAttribute('aria-expanded',open?'true':'false');
+      if(open){itemsBox.removeAttribute('hidden');}else{itemsBox.setAttribute('hidden','');}
       toggleSection(b.dataset.sec,!open);
     });
   });

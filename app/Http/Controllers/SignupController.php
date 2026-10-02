@@ -28,6 +28,8 @@ final class SignupController extends BaseController
      * List signups (role-scoped).
      *
      * Route:   GET /panel/signups
+     * Query:   page, per_page, sort (rider_name|horse_name|competition_title|
+     *          rade_name|amount|position|status|created_at|id), dir (asc|desc)
      * Auth:    role:admin,manager
      * Returns: HTML or JSON
      */
@@ -42,7 +44,14 @@ final class SignupController extends BaseController
             'status' => (string) $request->query('status', ''),
             'search' => (string) $request->query('search', ''),
         ];
-        $result = $this->c->get('signups')->list($filters, $ctx->actor(), $this->page($request), $this->perPage($request));
+        $result = $this->c->get('signups')->list(
+            $filters,
+            $ctx->actor(),
+            $this->page($request),
+            $this->perPage($request),
+            (string) $request->query('sort', ''),
+            (string) $request->query('dir', '')
+        );
         return $this->ok($result, $ctx, 200, ['total' => $result['total'], 'filtered' => $result['total']]);
     }
 

@@ -64,6 +64,19 @@ var SPRITE='<svg style="display:none" aria-hidden="true">'
 +'<symbol id="i-h2" viewBox="0 0 24 24"><path d="M4 6v12M12 6v12M4 12h8M16.5 10.5a2.5 2.5 0 1 1 4.5-1.5l-4.5 8.5h5"/></symbol>'
 +'<symbol id="i-ul" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/></symbol>'
 +'<symbol id="i-ol" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 5.5h1v4M3.5 15.5c0-.7.5-1.2 1.2-1.2s1.3.5 1.3 1.2S4 18.5 3.2 19.5H6"/></symbol>'
++'<symbol id="i-underline" viewBox="0 0 24 24"><path d="M7 4v6a5 5 0 0 0 10 0V4M5 20h14"/></symbol>'
++'<symbol id="i-strike" viewBox="0 0 24 24"><path d="M4 12h16M7.5 8.2C8.4 6.7 10 6 12 6c3 0 5 1.4 5 3.4 0 1.2-.7 2.1-1.9 2.7M16.4 15c-.7 1.9-2.4 3-4.6 3-3.1 0-5.2-1.4-5.2-3.4"/></symbol>'
++'<symbol id="i-h4" viewBox="0 0 24 24"><path d="M4 6v12M12 6v12M4 12h8M20 10l-4.5 8h9"/></symbol>'
++'<symbol id="i-p" viewBox="0 0 24 24"><path d="M14 6H8v12M8 6h6M14 6h3a4 4 0 0 1 0 8h-3"/></symbol>'
++'<symbol id="i-quote" viewBox="0 0 24 24"><path d="M9 6H5v6h4v6H5M20 6h-4v6h4v6h-4"/></symbol>'
++'<symbol id="i-code" viewBox="0 0 24 24"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></symbol>'
++'<symbol id="i-hr" viewBox="0 0 24 24"><path d="M4 12h16M6 7h12M6 17h12"/></symbol>'
++'<symbol id="i-clear" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6.5 7l1 13h9l1-13"/></symbol>'
++'<symbol id="i-source" viewBox="0 0 24 24"><path d="M9 8l-4 4 4 4M15 8l4 4-4 4"/></symbol>'
++'<symbol id="i-sub" viewBox="0 0 24 24"><path d="M5 5l6 7M11 5L5 12"/><path d="M12 15h7M15.5 15v5"/></symbol>'
++'<symbol id="i-sup" viewBox="0 0 24 24"><path d="M5 14l6-7M11 14l-6-7"/><path d="M12 7h7M15.5 7v-4"/></symbol>'
++'<symbol id="i-indent" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 6h2M4 10h4v8H4z"/></symbol>'
++'<symbol id="i-outdent" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10M4 6h2M4 18h4v-8H4z"/></symbol>'
 +'</svg>';
 
 function el(html){
@@ -79,6 +92,54 @@ function esc(v){
 function ic(name,cls){return '<svg class="ic'+(cls?' '+cls:'')+'"><use href="#'+name+'"/></svg>';}
 function faNum(v){return window.I18N.num(v);}
 function money(v){return window.I18N.money(v);}
+/*
+   Share codes are secrets: knowing one lets you hand somebody else's horse to
+   yourself. They must never reach a printed page or a copied DOM, so they are
+   masked by default and only written into the document when the user reveals
+   them. `.secret` is additionally hidden by @media print.
+*/
+function secret(code,opts){
+  opts=opts||{};
+  var has=String(code||'').length>0;
+  if(!has){return '<span class="mut">—</span>';}
+  var id='s'+(secret._n=(secret._n||0)+1);
+  return '<span class="secret" data-secret="'+id+'">'
+    +'<span class="secret-v" style="filter:blur(5px)" aria-hidden="true">'+esc(code)+'</span>'
+    +'<span class="secret-mask">••••••</span>'
+    +'<button type="button" class="btn-i secret-t" data-secret-t="'+id+'" title="نمایش" aria-label="نمایش کد">'+ic('i-eye')+'</button>'
+    +'<button type="button" class="btn-i secret-c" data-secret-c="'+id+'" title="کپی" aria-label="کپی کد">'+ic('i-copy')+'</button>'
+    +'</span>';
+}
+function bindSecrets(root){
+  (root||document).querySelectorAll('[data-secret-t]').forEach(function(b){
+    if(b.dataset.secretBound){return;}
+    b.dataset.secretBound='1';
+    b.addEventListener('click',function(){
+      var host=b.closest('.secret');
+      if(!host){return;}
+      var v=host.querySelector('.secret-v'),m=host.querySelector('.secret-mask');
+      if(!v){return;}
+      var on=v.style.filter!=='none';
+      v.style.filter=on?'none':'';
+      if(m){m.style.display=on?'none':'';}
+      b.setAttribute('aria-label',on?'پنهان کردن کد':'نمایش کد');
+      b.setAttribute('title',on?'پنهان کردن':'نمایش');
+    });
+  });
+  (root||document).querySelectorAll('[data-secret-c]').forEach(function(b){
+    if(b.dataset.secretBound){return;}
+    b.dataset.secretBound='1';
+    b.addEventListener('click',function(){
+      var host=b.closest('.secret');
+      var v=host&&host.querySelector('.secret-v');
+      if(!v){return;}
+      var text=String(v.textContent||'');
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(function(){toast('کد کپی شد');},function(){toast('کپی نشد — کد را دستی یادداشت کنید','w');});
+      }else{toast('کپی در این مرورگر پشتیبانی نمی‌شود','w');}
+    });
+  });
+}
 function ini(name){
   return String(name||'؟').trim().split(/\s+/).slice(0,2).map(function(w){return w[0];}).join('');
 }
@@ -455,6 +516,9 @@ function table(columns,rows,opts){
     var label=c.raw?c.label:esc(c.label);
     var attrs=' class="'+cls.join(' ')+'"';
     if(c.sortable||c.sortKey){attrs+=' data-sort="'+esc(c.sortKey||c.key)+'" tabindex="0" role="button" aria-label="مرتب‌سازی بر اساس '+esc(c.label)+'"';}
+    /* Selection checkboxes and action buttons are meaningless on paper and
+       cost a whole column each in a printed grid. */
+    if(c.noPrint){attrs+=' data-no-print="1"';}
     return '<th'+attrs+'>'+label+arrow+'</th>';
   }).join('');
   var body;
@@ -472,7 +536,7 @@ function table(columns,rows,opts){
         }catch(e){
           cell='<span class="mut i11" title="'+esc(String(e&&e.message||e))+'">—</span>';
         }
-        return '<td'+(c.wrap?' class="wrap"':'')+'>'+cell+'</td>';
+        return '<td'+(c.wrap?' class="wrap"':'')+(c.noPrint?' data-no-print="1"':'')+'>'+cell+'</td>';
       }).join('')+'</tr>';
     }).join('');
   }
@@ -929,57 +993,362 @@ function initPicks(root,registry){
   });
 }
 
-/* Loader factory: search any list endpoint and map rows to {v,l}. */
+/* Loader factory: search any list endpoint and map rows to {v,l}.
+   `label` may be a field name ('title'), a function, or a dot path
+   ('venue.name'). A plain string used to be called as a function, and the
+   TypeError was swallowed by the .catch below, so the dropdown rendered
+   "موردی یافت نشد" against a 200 response. */
 function spkFromApi(path,label,extra){
+  var toLabel=(typeof label==='function')
+    ? label
+    : function(r){
+        var parts=String(label||'').split('.');
+        var v=r;
+        for(var i=0;i<parts.length;i++){
+          if(v==null){return '';}
+          v=v[parts[i]];
+        }
+        return v==null?'':String(v);
+      };
   return function(term,cb){
     var q={per_page:20,search:term||''};
     if(extra){Object.keys(extra).forEach(function(k){q[k]=extra[k];});}
     API.get(path,q).then(function(d){
-      cb(rows(d).map(function(r){return {v:r.id,l:label(r)};}));
+      cb(rows(d).map(function(r){return {v:r.id,l:toLabel(r)};}).filter(function(o){return String(o.l)!=='';}));
     }).catch(function(){cb([]);});
   };
 }
 
-/* ---------- rich text editor (contenteditable, sanitized on save) ---------- */
+/* ---------- rich text editor ---------- */
+/*
+   Quill 2 (vendored, MIT-free BSD-3) is the real editor: non-technical staff
+   need drag-and-drop images, lists and headings without learning HTML. It is
+   loaded lazily so pages without an editor never pay for it, and the original
+   contenteditable markup stays in the DOM as a fallback — if the vendor file
+   is missing or blocked the field still works.
+*/
+var QUILL_SRC='/views/assets/vendor/quill.js';
+/*
+   Toolbar is custom DOM rather than Quill's array shorthand, for two reasons:
+   the target audience is Persian-speaking and non-technical, so every control
+   needs a Persian tooltip (Quill's tooltip module is switched off) and a label
+   that reads on its own; and the array shorthand hides the `hr` divider and the
+   HTML source view, which are the two controls staff actually ask for.
+   Quill wires any `[data-format]` control it finds inside the container. */
+function edtToolbar(){
+  var b=function(fmt,val,icon,title,cls){
+    return '<button type="button" class="edt-b'+(cls?' '+cls:'')+'" data-format="'+fmt+'"'
+      +(val!=null?' data-value="'+esc(val)+'"':'')+' title="'+esc(title)+'" aria-label="'+esc(title)+'">'
+      +ic(icon)+'</button>';
+  };
+  return '<div class="edt-toolbar" data-edt-toolbar>'
+    +'<span class="edt-group">'
+    +b('undo',null,'i-refresh','واگرد (Ctrl+Z)','edt-wide')
+    +b('redo',null,'i-refresh','ازنو (Ctrl+Y)','edt-wide edt-flip')
+    +'</span>'
+    +'<span class="edt-sep"></span>'
+    +'<span class="edt-group edt-head">'
+    +'<select class="edt-pick" data-format="header" title="سبک متن" aria-label="سبک متن">'
+    +'<option value="">متن عادی</option>'
+    +'<option value="2">عنوان اصلی</option>'
+    +'<option value="3">زیرعنوان</option>'
+    +'<option value="4">عنوان کوچک</option>'
+    +'</select></span>'
+    +'<span class="edt-sep"></span>'
+    +'<span class="edt-group">'
+    +b('bold',null,'i-bold','ضخیم (Ctrl+B)')
+    +b('italic',null,'i-italic','مورب (Ctrl+I)')
+    +b('underline',null,'i-underline','زیرخط (Ctrl+U)')
+    +b('strike',null,'i-strike','خط‌خورده')
+    +b('script','sub','i-sub','زیرنویس')
+    +b('script','super','i-sup','بالانویس')
+    +b('code',null,'i-code','کد درون‌خطی')
+    +'</span>'
+    +'<span class="edt-sep"></span>'
+    +'<span class="edt-group">'
+    +b('blockquote',null,'i-quote','نقل قول')
+    +b('code-block',null,'i-code','بلوک کد')
+    +'</span>'
+    +'<span class="edt-sep"></span>'
+    +'<span class="edt-group">'
+    +b('list','bullet','i-ul','فهرست نشانه‌دار')
+    +b('list','ordered','i-ol','فهرست شماره‌دار')
+    +b('indent',null,'i-indent','تورفتگی بیشتر')
+    +b('outdent',null,'i-outdent','کاهش تورفتگی')
+    +b('divider',null,'i-hr','خط جداکننده')
+    +'</span>'
+    +'<span class="edt-sep"></span>'
+    +'<span class="edt-group">'
+    +b('link',null,'i-link','درج پیوند (Ctrl+K)')
+    +b('image',null,'i-image','درج تصویر')
+    +b('clean',null,'i-clear','حذف قالب‌بندی')
+    +'</span>'
+    +'<span class="edt-group edt-end">'
+    +'<button type="button" class="edt-b edt-wide" data-edt-src title="ویرایش کد HTML" aria-label="ویرایش کد HTML">'+ic('i-source')+'<span class="edt-bt">کد</span></button>'
+    +'<button type="button" class="edt-b edt-wide" data-edt-help title="راهنمای قالب‌بندی" aria-label="راهنمای قالب‌بندی">'+ic('i-info')+'<span class="edt-bt">راهنما</span></button>'
+    +'</span>'
+    +'</div>';
+}
+
+function ensureQuill(cb){
+  if(window.Quill){cb(window.Quill);return;}
+  var pending=(ensureQuill._q=ensureQuill._q||[]);
+  pending.push(cb);
+  if(ensureQuill._loading){return;}
+  ensureQuill._loading=true;
+  var s=document.createElement('script');
+  s.src=QUILL_SRC;
+  s.async=true;
+  s.onload=function(){var P=ensureQuill._q||[];ensureQuill._q=[];P.forEach(function(f){try{f(window.Quill);}catch(e){}});};
+  s.onerror=function(){var P=ensureQuill._q||[];ensureQuill._q=[];ensureQuill._failed=true;P.forEach(function(f){try{f(null);}catch(e){}});};
+  document.head.appendChild(s);
+}
+
+/* Upload an image chosen in, dropped on, or pasted into the editor. */
+function edtUploadImage(file,cb){
+  API.upload('/panel/media',file).then(function(d){
+    cb(d&&d.url?d.url:null);
+  }).catch(function(err){
+    toast((err.errors&&err.errors[0].message)||'بارگذاری تصویر ناموفق بود','e');
+    cb(null);
+  });
+}
+function edtPickImage(cb){
+  var i=document.createElement('input');
+  i.type='file';
+  i.accept='image/*';
+  i.onchange=function(){
+    var f=i.files&&i.files[0];
+    if(f){edtUploadImage(f,cb);}
+  };
+  i.click();
+}
+function initQuillEditor(host,ta,initial,opts){
+  ensureQuill(function(Quill){
+    if(!Quill||!host.isConnected&&!host.parentNode){return;}
+    var body=host.querySelector('.edt-body');
+    var mount=host.querySelector('.edt-q');
+    var count=host.querySelector('.edt-count');
+    if(!mount||mount.dataset.quillOn){return;}
+    mount.dataset.quillOn='1';
+    var toolbar=host.querySelector('[data-edt-toolbar]');
+    var q=new Quill(mount,{
+      theme:null,
+      /* tooltip:false — our own Persian titles stay on the controls. */
+      modules:{toolbar:toolbar||undefined,tooltip:false},
+      placeholder:opts.placeholder||'متن را اینجا بنویسید…'
+    });
+    mount.setAttribute('dir','rtl');
+    q.root.setAttribute('dir','rtl');
+    /* Seed through the clipboard API: Quill strips plain root.innerHTML. */
+    if(initial){q.clipboard.dangerouslyPasteHTML(initial);}
+
+    function updateCount(){
+      if(!count){return;}
+      var text=String(q.getText()||'').replace(/\s+/g,' ').trim();
+      count.textContent=faNum(text?text.split(' ').length:0)+' واژه · '+faNum(text.length)+' نویسه';
+    }
+    q.on('text-change',function(){
+      /* getSemanticHTML() emits clean tags (no Quill's ql-* spans/classes), so
+         HtmlSanitizer's whitelist and richHtml() both accept it. */
+      ta.value=q.getSemanticHTML();
+      updateCount();
+    });
+    function insertImage(url){
+      if(!url){return;}
+      var range=q.getSelection(true);
+      q.insertEmbed(range.index,'image',url,'user');
+      q.setSelection(range.index+1,'silent');
+      ta.value=q.getSemanticHTML();
+    }
+    var tb=q.getModule('toolbar');
+    if(tb&&tb.addHandler){
+      tb.addHandler('image',function(){edtPickImage(insertImage);return false;});
+      /* The divider blot has no default handler, and Quill 2 does not ship an
+         arrow-key nudge handler either. */
+      tb.addHandler('divider',function(){
+        var r=q.getSelection(true);
+        q.insertEmbed(r.index,'divider','user');
+        q.setSelection(r.index+1,'silent');
+        return false;
+      });
+    }
+    /* HTML source view: staff occasionally need to paste ready-made markup. */
+    var srcBtn=host.querySelector('[data-edt-src]');
+    if(srcBtn){
+      srcBtn.addEventListener('mousedown',function(e){e.preventDefault();});
+      srcBtn.addEventListener('click',function(){
+        var on=srcBtn.getAttribute('aria-pressed')!=='true';
+        if(on){
+          ta.value=q.getSemanticHTML();
+          ta.classList.remove('hide');
+          ta.classList.add('edt-src-on');
+          ta.style.display='';
+          ta.focus();
+        }else{
+          q.clipboard.dangerouslyPasteHTML(ta.value);
+          ta.classList.add('hide');
+          ta.classList.remove('edt-src-on');
+          ta.style.display='none';
+          q.focus();
+        }
+        srcBtn.setAttribute('aria-pressed',on?'true':'false');
+        srcBtn.classList.toggle('on',on);
+        ta.value=on?ta.value:q.getSemanticHTML();
+      });
+    }
+    var helpBtn=host.querySelector('[data-edt-help]');
+    if(helpBtn){
+      helpBtn.addEventListener('click',function(){
+        UI.modal('راهنمای نوشتن متن', '<div class="pad-s i13" style="line-height:2">'
+          +'<p>متن را هرطور دوست دارید بنویسید؛ قالب‌بندی اختیاری است.</p>'
+          +'<ul style="padding-inline-start:20px;margin:8px 0">'
+          +'<li><b>تصویر</b> را می‌توانید از روی دسکتاپ روی متن بکشید و رها کنید، یا آن را کپی و اینجا بچسبانید، یا از نوار ابزار «درج تصویر» را بزنید.</li>'
+          +'<li><b>عنوان‌ها</b> با «سبک متن» انتخاب می‌شوند و در صفحه عمومی هم درشت‌تر نمایش داده می‌شوند.</li>'
+          +'<li><b>فهرست‌های تودرتو</b> را با «تورفتگی بیشتر» و «کاهش تورفتگی» تنظیم کنید.</li>'
+          +'<li>برای حذف قالب‌بندی، روی متن انتخاب‌شده «حذف قالب‌بندی» را بزنید.</li>'
+          +'<li>دکمهٔ «کد» کل متن را به شکل HTML نشان می‌دهد؛ اگر اشتباهی کردید همان‌جا اصلاح کنید.</li>'
+          +'</ul>'
+          +'<p class="mut i12">همین متن بدون تغییر در پنل و در صفحه عمومی مسابقه نمایش داده می‌شود.</p>'
+          +'<div class="row jend mt3"><button class="btn btn-p" data-close-edt>متوجه شدم</button></div>'
+          +'</div>');
+        var c=document.querySelector('[data-close-edt]');
+        if(c){c.addEventListener('click',closeDialog);}
+      });
+    }
+    /* Drag & drop and paste both carry a File — upload instead of dropping it. */
+    q.root.addEventListener('drop',function(e){
+      var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+      if(f&&/^image\//.test(f.type)){e.preventDefault();edtUploadImage(f,insertImage);}
+    });
+    q.root.addEventListener('paste',function(e){
+      var items=e.clipboardData&&e.clipboardData.files;
+      var f=items&&items[0];
+      if(f&&/^image\//.test(f.type)){e.preventDefault();edtUploadImage(f,insertImage);}
+    });
+    if(body){body.style.display='none';}
+    var fb=host.querySelector('[data-edt-fallback]');
+    if(fb){fb.style.display='none';}
+    if(ta.classList){ta.classList.remove('edt-src-on');}
+    ta.style.display='none';
+    updateCount();
+    ta.value=q.getSemanticHTML();
+  });
+}
+
 function editor(name,label,value,opts){
   opts=opts||{};
   return field(label,
-    '<div class="edt" data-edt="'+esc(name)+'">'
-    +'<div class="edt-bar">'
-    +'<button type="button" data-cmd="bold" title="ضخیم">'+ic('i-bold')+'</button>'
-    +'<button type="button" data-cmd="italic" title="مورب">'+ic('i-italic')+'</button>'
+    '<div class="edt edt-rich" data-edt="'+esc(name)+'">'
+    +edtToolbar()
+    +'<div class="edt-q"></div>'
+    +'<div class="edt-bar" data-edt-fallback>'
+    +'<button type="button" data-cmd="bold" title="ضخیم (Ctrl+B)">'+ic('i-bold')+'</button>'
+    +'<button type="button" data-cmd="italic" title="مورب (Ctrl+I)">'+ic('i-italic')+'</button>'
+    +'<button type="button" data-cmd="underline" title="زیرخط">'+ic('i-underline')+'</button>'
+    +'<button type="button" data-cmd="strikeThrough" title="خط‌خورده">'+ic('i-strike')+'</button>'
+    +'<span class="edt-sep"></span>'
     +'<button type="button" data-cmd="formatBlock" data-val="h3" title="عنوان">'+ic('i-h2')+'</button>'
+    +'<button type="button" data-cmd="formatBlock" data-val="h4" title="زیرعنوان">'+ic('i-h4')+'</button>'
+    +'<button type="button" data-cmd="formatBlock" data-val="p" title="پاراگراف">'+ic('i-p')+'</button>'
+    +'<button type="button" data-cmd="formatBlock" data-val="blockquote" title="نقل‌قول">'+ic('i-quote')+'</button>'
+    +'<span class="edt-sep"></span>'
     +'<button type="button" data-cmd="insertUnorderedList" title="فهرست">'+ic('i-ul')+'</button>'
     +'<button type="button" data-cmd="insertOrderedList" title="فهرست شماره‌دار">'+ic('i-ol')+'</button>'
     +'<a class="btn-i" data-cmd="createLink" title="پیوند" style="padding:5px">'+ic('i-link')+'</a>'
-    +'<span class="g1"></span><span class="i11 mut">'+ic('i-info')+' قالب‌بندی ساده</span>'
+    +'<button type="button" data-cmd="unlink" title="حذف پیوند" style="padding:5px">'+ic('i-x2')+'</button>'
+    +'<a class="btn-i" data-cmd="insertImage" title="تصویر (نشانی)" style="padding:5px">'+ic('i-image')+'</a>'
+    +'<a class="btn-i" data-cmd="insertHorizontalRule" title="خط جداکننده" style="padding:5px">'+ic('i-hr')+'</a>'
+    +'<span class="edt-sep"></span>'
+    +'<button type="button" data-cmd="removeFormat" title="حذف قالب‌بندی">'+ic('i-clear')+'</button>'
+    +'<button type="button" data-edt-src title="نمایش کد HTML">'+ic('i-source')+'</button>'
     +'</div>'
-    +'<div class="edt-body" contenteditable="true" role="textbox" aria-multiline="true">'+esc(value||'')+'</div>'
-    +'<textarea class="ta hide" name="'+esc(name)+'" style="display:none">'+esc(value||'')+'</textarea>'
+    +'<div class="edt-body" contenteditable="true" role="textbox" aria-multiline="true" data-ph="'+(opts.placeholder||'متن را اینجا بنویسید…')+'">'+esc(value||'')+'</div>'
+    +'<textarea class="ta edt-src-ta hide" name="'+esc(name)+'" spellcheck="false" dir="ltr" style="display:none">'+esc(value||'')+'</textarea>'
+    +'<div class="edt-foot"><span class="i11 mut edt-count"></span>'
+    +'<span class="i11 mut">'+ic('i-image')+' تصویرها را می‌توانید روی متن بکشید و رها کنید. همین متن در صفحه عمومی مسابقه هم نمایش داده می‌شود.</span></div>'
     +'</div>',opts);
 }
 function initEditors(root){
   (root||document).querySelectorAll('[data-edt]').forEach(function(host){
     if(host.dataset.edtOn){return;}
     host.dataset.edtOn='1';
+    var ta0=host.querySelector('.edt-src-ta');
+    /* Prefer Quill; the contenteditable editor below stays as a fallback and
+       takes over only if Quill never arrives. */
+    if(ta0&&host.querySelector('.edt-q')){
+      initQuillEditor(host,ta0,String(ta0.value||''),{placeholder:host.querySelector('.edt-body')?host.querySelector('.edt-body').dataset.ph:''});
+    }
     var body=host.querySelector('.edt-body');
-    var ta=host.querySelector('textarea');
+    var ta=host.querySelector('.edt-src-ta');
+    var count=host.querySelector('.edt-count');
+    /* Scope to the fallback bar: the Quill toolbar has its own [data-edt-src]
+       button, and an unscoped querySelector would hand it to this legacy
+       handler as well as to Quill's. */
+    var fbBar=host.querySelector('[data-edt-fallback]');
+    var srcBtn=fbBar?fbBar.querySelector('[data-edt-src]'):null;
+
+    function plain(){
+      /* innerText is unavailable in the Node DOM stub, so fall back to tags. */
+      return String(body.innerText!=null?body.innerText:body.textContent||'')
+        .replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ');
+    }
+    function updateCount(){
+      if(!count){return;}
+      var text=plain().replace(/\s+/g,' ').trim();
+      var words=text?text.split(' ').length:0;
+      count.textContent=faNum(words)+' واژه · '+faNum(text.length)+' نویسه';
+    }
     /* Plain text paste keeps the stored HTML clean. */
     body.addEventListener('paste',function(e){
       e.preventDefault();
       var text=(e.clipboardData||window.clipboardData).getData('text/plain');
       document.execCommand('insertText',false,text);
     });
-    var sync=function(){ta.value=body.innerHTML.trim();};
+    var sync=function(){ta.value=body.innerHTML.trim();updateCount();};
     body.addEventListener('input',sync);
-    host.querySelectorAll('[data-cmd]').forEach(function(b){
+
+    /* HTML source view: lets an author paste ready-made markup, which is the
+       point of a "flexible content" field for a competition description. */
+    function setSource(on){
+      if(on){
+        ta.value=body.innerHTML.trim();
+        body.style.display='none';
+        ta.style.display='';
+        ta.classList.remove('hide');
+        ta.classList.add('edt-src-on');
+        ta.focus();
+      }else{
+        body.innerHTML=ta.value.trim();
+        ta.style.display='none';
+        ta.classList.add('hide');
+        ta.classList.remove('edt-src-on');
+        body.style.display='';
+        body.focus();
+      }
+      if(srcBtn){srcBtn.setAttribute('aria-pressed',on?'true':'false');}
+      sync();
+    }
+    if(srcBtn){
+      srcBtn.addEventListener('click',function(){
+        setSource(srcBtn.getAttribute('aria-pressed')!=='true');
+      });
+    }
+    ta.addEventListener('input',function(){if(srcBtn&&srcBtn.getAttribute('aria-pressed')==='true'){updateCount();}});
+
+    host.querySelectorAll('[data-edt-fallback] [data-cmd]').forEach(function(b){
       b.addEventListener('mousedown',function(e){e.preventDefault();});
       b.addEventListener('click',function(){
         var cmd=b.dataset.cmd;
+        if(srcBtn&&srcBtn.getAttribute('aria-pressed')==='true'){setSource(false);}
         if(cmd==='createLink'){
           var url=window.prompt('نشانی پیوند (http/https)','https://');
           if(!url){return;}
           document.execCommand('createLink',false,url);
+        }else if(cmd==='insertImage'){
+          var src=window.prompt('نشانی تصویر (http/https)','https://');
+          if(!src){return;}
+          document.execCommand('insertImage',false,src);
         }else if(cmd==='formatBlock'){
           document.execCommand('formatBlock',false,b.dataset.val);
         }else{
@@ -1126,7 +1495,11 @@ function closePicker(){if(window.__closeGhfPicker){window.__closeGhfPicker();}}
 
 /* Render stored rich text safely: only inline formatting, headings, lists,
    paragraphs and http(s) links survive; everything else is dropped. */
-var RICH_TAGS={B:1,STRONG:1,I:1,EM:1,H3:1,H4:1,P:1,BR:1,UL:1,OL:1,LI:1,DIV:1,SPAN:1,A:1};
+/* Tags the rich editor may produce and richHtml() will render. Keep in sync
+   with HtmlSanitizer::ALLOWED_TAGS so what the editor writes survives the
+   server-side whitelist. */
+var RICH_TAGS={B:1,STRONG:1,I:1,EM:1,U:1,S:1,SUB:1,SUP:1,MARK:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,P:1,BR:1,UL:1,OL:1,LI:1,DIV:1,SPAN:1,A:1,
+  BLOCKQUOTE:1,CODE:1,PRE:1,HR:1,IMG:1,FIGURE:1,FIGCAPTION:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TH:1,TD:1};
 function richHtml(html){
   if(!html){return '<span class="mut">—</span>';}
   if(window.DOMParser){
@@ -1144,8 +1517,15 @@ function richHtml(html){
           child.setAttribute('target','_blank');
           child.setAttribute('rel','noopener noreferrer');
         }
+        if(child.tagName==='IMG'){
+          var src=child.getAttribute('src')||'';
+          /* javascript:/data: URLs never reach an <img src>, and dropping the
+             attribute leaves the broken-image marker visible instead. */
+          if(!/^https?:\/\//i.test(src)){child.remove();return;}
+        }
         Array.prototype.slice.call(child.attributes).forEach(function(at){
-          if(at.name!=='href'&&at.name!=='target'&&at.name!=='rel'){child.removeAttribute(at.name);}
+          var keep=(at.name==='href'||at.name==='target'||at.name==='rel'||at.name==='src'||at.name==='alt'||at.name==='width'||at.name==='height'||at.name==='colspan'||at.name==='rowspan');
+          if(!keep){child.removeAttribute(at.name);}
         });
         walk(child);
       });
@@ -1160,6 +1540,7 @@ window.UI={
   sprite:SPRITE,el:el,esc:esc,ic:ic,faNum:faNum,money:money,av:av,
   toast:toast,busy:busy,drawer:drawer,modal:modal,confirm:confirmDlg,typedConfirm:typedConfirm,closeDialog:closeDialog,
   badge:badge,inp:inp,sel:sel,ta:ta,field:field,formValues:formValues,showErrors:showErrors,
+  secret:secret,bindSecrets:bindSecrets,
   notifLabel:notifLabel,
   table:table,pagerHtml:pagerHtml,attachDatepicker:attachDatepicker,toIso:toIso,
   pickField:pickField,initPicks:initPicks,spkFromApi:spkFromApi,editor:editor,initEditors:initEditors,

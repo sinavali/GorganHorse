@@ -12,8 +12,11 @@ Read in this order depending on your role.
 |---|---|---|---|---|
 | 1 | [Project Proposal — Gorgan Horse Federation Panel.md](./Project%20Proposal%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Client, stakeholders | Short | Executive summary, problem, solution, deliverables, KPIs, success metrics. |
 | 2 | [Backend Blueprint — Gorgan Horse Federation Panel.md](./Backend%20Blueprint%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Architects, reviewers, implementers | Long | Master blueprint. Principles, scope, schema, flows, routes, KPIs, integrations, glossary, naming, error codes, implementation checklist, risk register. |
-| 3 | [Technical — Gorgan Horse Federation Panel.md](./Technical%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Implementers, maintainers | Long | Stack, implementation rules, auth internals, validations, deployment, code standards. |
-| 4 | [User Usage — Gorgan Horse Federation Panel.md](./User%20Usage%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Frontend developers, UX reviewers | Long | Every screen, flow, KPI, empty state, error message, print view. The frontend build contract. |
+| 3 | [Technical Specification — Gorgan Horse Federation Panel.md](./Technical%20Specification%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Implementers, maintainers | Long | Stack, implementation rules, auth internals, validations, deployment, code standards. |
+| 4 | [User Usage Specification — Gorgan Horse Federation Panel.md](./User%20Usage%20Specification%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Frontend developers, UX reviewers | Long | Every screen, flow, KPI, empty state, error message, print view. The frontend build contract. |
+| 5 | [Features.md](./Features.md) | Everyone | Medium | Per-feature implementation status: what is built, how, and why. Updated as work lands. |
+| — | [The Loop.md](./The%20Loop.md) | Owner, agents | Short | Operating procedure: gap analysis → issues → delegation → implementation loop. |
+| — | [nginx.conf.sample](./nginx.conf.sample) | Deployers | Short | Nginx site config sample matching the real layout (`public/` root, `/views/assets/` caching). |
 
 ---
 
@@ -86,7 +89,7 @@ The implementation contract. Specifies **how** the Blueprint is realized.
 
 **Covers:**
 - **§1 Purpose & Audience**
-- **§2 Tech Stack** — PHP 8.1+, SQLite, no framework, Alpine.js, Tailwind, AG Grid, SheetJS, QR
+- **§2 Tech Stack** — PHP 8.1+, SQLite, no framework, no npm: a no-build SPA with Quill and Vazirmatn vendored
 - **§3 Runtime Requirements**
 - **§4 Bootstrapping & Lifecycle** — container, file merging policy
 - **§5 Routing & HTTP Layer** — route definition, matching, request/response
@@ -158,7 +161,7 @@ The frontend build contract. Specifies **how users interact** with the panel.
 
 ---
 
-## How the four documents relate
+## How the documents relate
 
 ```
 Project Proposal          ← client-facing summary
@@ -175,6 +178,7 @@ Backend Blueprint         ← architecture, schema, flows, principles, KPIs
 - The **Blueprint** answers "what is the system, architecturally?"
 - The **Technical** answers "how do I build it?"
 - The **User Usage** answers "how do users interact with it?"
+- **Features.md** answers "what is actually built right now, and why?"
 
 Every document is standalone but cross-references the others by section number.
 
@@ -211,13 +215,14 @@ If you are looking for one of these and can't find it, check the Blueprint.
 
 The following are explicitly out of scope and documented as such:
 
-- WordPress site (landing pages, blog, SEO) — handled separately
+- WordPress site (blog, general landing pages, SEO) — handled separately. The shareable
+  competition page (`GET /c/{slug}`) is the one exception: the panel renders it itself.
 - WordPress API — developed separately
 - Email sending — dropped entirely
 - PWA — not implemented
-- Dark mode — not implemented
 - CLI — not implemented
 - Multi-tenancy — not implemented
+- Custom themes beyond the built-in light/dark toggle — not implemented
 - Migrations from old WordPress data — not implemented
 - Column parity with old Excel plugin — richer by default
 - Bulk SMS — not implemented
@@ -235,6 +240,7 @@ See the Blueprint §3.2 for the full list.
 | Backend Blueprint | Final |
 | Technical Specification | Final |
 | User Usage Specification | Final |
+| Features.md | Living — updated as work lands |
 
 No versioning. No phasing. Every document is production-ready.
 

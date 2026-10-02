@@ -1,7 +1,7 @@
 # README.md — Gorgan Horse Federation Panel
 
 **Project:** Backend panel for the Gorgan Horse Federation (هیئت سوارکاری استان گلستان)
-**Status:** Specification complete, ready for implementation
+**Status:** Implemented (per-feature status tracked in [`docs/Features.md`](./docs/Features.md))
 **Stack:** PHP 8.1+, SQLite, no framework, RTL-first, fa-IR-first
 
 ---
@@ -25,8 +25,9 @@ All project documentation lives in `/docs/`. Read in this order depending on you
 | [`docs/README.md`](./docs/README.md) | Everyone | Documents index and reading guide. |
 | [`docs/Project Proposal — Gorgan Horse Federation Panel.md`](./docs/Project%20Proposal%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Client, stakeholders | Executive summary, deliverables, KPIs, success metrics. |
 | [`docs/Backend Blueprint — Gorgan Horse Federation Panel.md`](./docs/Backend%20Blueprint%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Architects, reviewers | Master blueprint: principles, scope, schema, flows, routes, KPIs, integrations, glossary, error codes, implementation checklist, risk register. |
-| [`docs/Technical — Gorgan Horse Federation Panel.md`](./docs/Technical%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Implementers, maintainers | Stack, implementation rules, auth internals, validations, deployment. |
-| [`docs/User Usage — Gorgan Horse Federation Panel.md`](./docs/User%20Usage%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Frontend developers, UX | Every screen, flow, KPI, empty state, error message, print view. |
+| [`docs/Technical Specification — Gorgan Horse Federation Panel.md`](./docs/Technical%20Specification%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Implementers, maintainers | Stack, implementation rules, auth internals, validations, deployment. |
+| [`docs/User Usage Specification — Gorgan Horse Federation Panel.md`](./docs/User%20Usage%20Specification%20—%20Gorgan%20Horse%20Federation%20Panel.md) | Frontend developers, UX | Every screen, flow, KPI, empty state, error message, print view. |
+| [`docs/Features.md`](./docs/Features.md) | Everyone | Per-feature implementation status, with the notes behind each decision. |
 
 **Note:** The Blueprint includes merged sections for Glossary, Naming Conventions, Error Codes, Implementation Checklist, and Risk Register. Standalone documents for those are not needed.
 
@@ -56,17 +57,18 @@ The User Usage document is your reference. Validate against real users (Admin, M
 ```
 /
 ├── README.md                    ← you are here
-├── docs/                   ← all specification docs
+├── docs/                        ← all specification docs (see below)
 ├── public/                      ← web root (single entry point)
 ├── app/                         ← application code
 ├── database/                    ← schemas, seeds, runtime DBs
 ├── cultures/                    ← culture JSON files (fa-IR, en-US)
-├── uploads/                     ← user-uploaded media
+├── uploads/                     ← user-uploaded media (outside the web root)
 ├── cache/                       ← file cache
 ├── logs/                        ← raw log retention
 ├── backups/                     ← zip backups
+├── tests/                       ← PHP + front-end contract suites (`php tests/run_all_tests.php`)
 ├── vendor/                      ← vendored PHP libraries
-└── docs/                        ← auxiliary files (nginx sample, etc.)
+└── docs/                        ← specification docs + auxiliary files (nginx sample, …)
 ```
 
 Full folder structure is in the **Backend Blueprint §5**.
@@ -84,6 +86,8 @@ public/views/
 ├── index.html                 ← SPA shell (served for `/`, `/payment/success`, `/payment/failed`)
 └── assets/
     ├── favicon.svg
+    ├── fonts/                 ← vendored Vazirmatn woff2 files (+ README with licence)
+    ├── vendor/                ← vendored Quill 2.0.3 (+ README with licence)
     ├── css/app.css            ← design system (CSS variables, RTL, dark mode, tables, modals)
     └── js/
         ├── i18n.js            ← Jalali calendar, Persian digits, money/date formatting
@@ -161,6 +165,77 @@ public/views/
 - **Profile** carries personal activity from `GET /panel/profile/stats`, which is scoped
   to the signed-in account (so it is safe for every role): role-aware stat cards, a
   six-month signup trend, and the signup status mix.
+- **Ordering and paging happen in SQL.** `GET /panel/signups` and
+  `GET /panel/standings` accept `sort`, `dir`, `page` and `per_page` and both return
+  the `{rows, total, page, per_page}` envelope. The services resolve the sort key
+  through a whitelist (`SignupService::SORTABLE`, `ResultService::STANDINGS_SORTABLE`)
+  and fall back to a default column for anything unknown, so a pager and a sort header
+  can never disagree about which rows are on screen. Sorting also resets to page 1.
+  `/standings` used to return every confirmed signup in the province in a single
+  response; it is now paginated and scoped by rider/horse/page size.
+- **Competition entries live on the competition page.** Staff no longer get bounced to
+  `/signups` to see a competition's entries: `compSignupsSection()` renders them grouped
+  by "rade" (one collapsible block per rade, with capacity, signup count and remaining
+  places) with a toggle to a single flat sortable list. Approve / reject / position stay
+  in place, and the view state (`?su_view=&su_status=&su_q=`) is URL state.
+- **Competitions carry a wide banner** (`competitions.banner_media_id`), uploaded through
+  `POST /panel/competitions/{id}/banner` and shown as the hero of the public page.
+  Because uploads live outside the web root and `GET /media/{id}` requires auth, the
+  image reaches anonymous visitors through the guest route `GET /c/{slug}/banner`,
+  which only ever resolves `competitions.banner_media_id`.
+- **The public competition page** (`GET /c/{slug}`) is a landing page rather than a
+  form: full-bleed hero (banner overlay or gradient), status pill, two-column body with
+  a sticky facts sidebar, capacity bars per rade, the announcement callout, and the
+  sanitised description/rules. `og:image` points at the banner.
+- **Rich text fields are Quill 2**, not a hand-rolled `contenteditable`: staff are not
+  technical, so headings, lists, links and **drag-and-drop / paste / pick images** all
+  work. The toolbar is built by `edtToolbar()` and offers undo/redo, a block-format
+  select (paragraph/H2/H3/H4), bold/italic/underline/strike-through, subscript,
+  superscript, inline code, blockquote, code block, bullet/ordered lists, indent and
+  outdent, a divider, link, image (uploads through `POST /panel/media` and embeds
+  `/media/{id}`), clear formatting, an HTML source view (so ready-made markup can be
+  pasted) and a Persian help dialog. Colour, font size and alignment are deliberately
+  not offered: they serialise to inline styles the sanitizer strips anyway. Images can
+  also be dropped or pasted straight into the editor. What it can produce is whitelisted
+  on both ends: `HtmlSanitizer::ALLOWED_TAGS` on the server and `RICH_TAGS` in
+  `richHtml()`, which also strips non-`http(s)` `href`/`src` values and hardens links
+  with `target="_blank" rel="noopener noreferrer"`. Quill's `getSemanticHTML()` is
+  stored, so no editor classes leak into the database, and the original `contenteditable`
+  editor remains as a fallback if the vendor file is ever missing. Quill's own CSS is
+  deliberately not vendored (`quill.snow.css` is LTR-first), so a small RTL theme in
+  `app.css` applies the panel's tokens under `.ql-` selectors.
+- **The horse gallery** honours `horses.max_images` (5): responsive tiles, a "cover"
+  badge on the first image, numbered tiles, the add tile hidden once the cap is reached,
+  an "n of 5" counter, multi-file upload, and a keyboard-navigable lightbox
+  (Esc / ← / →, backdrop click).
+- **Vendored front-end libraries and fonts** live under `public/views/assets/vendor/`
+  and `public/views/assets/fonts/`, because the project has no build step, no npm and no
+  bundler. Both directories carry a `README.md` recording what the file is, where it
+  came from and under which licence. Quill 2 is loaded **lazily** (only when a rich-text
+  field is initialised); Vazirmatn is preloaded and served from the panel so the public
+  page renders the same on a host with no outbound network.
+- **Share codes are secrets** and never leave through a side channel: `UI.secret()`
+  renders them blurred behind a reveal/copy control (so the digits are not in the
+  printed DOM at all), `.secret` is `display:none` under `@media print`, and both CSV
+  writers redact them server-side via `ReportEngine::isSecretColumn()`.
+- **Printed grids drop what only makes sense on screen.** A column can opt out with
+  `noPrint:true`, which emits `data-no-print` and is hidden by `@media print` — the
+  selection checkbox and per-row action columns use it instead of costing a column each
+  on paper.
+- **The horses grid filters on what the API already supported**: status, gender, race,
+  colour, owner, microchip, free text and page size. `gender` / `race` / `colour` are
+  stored on `horses` as *labels* while the controlled vocabularies are id-keyed, so
+  `HorseService::list()` resolves a numeric filter value to its label first (a bare
+  label still works, and an unknown id matches nothing instead of everything).
+- **Sidebar groups fold.** Collapse state lives on `aria-expanded`, and both
+  `.nsec[aria-expanded="false"] + .nsec-items` and `.nsec-items[hidden]` are forced to
+  `display:none`: an author `display` declaration beats the UA `[hidden]` rule, which is
+  why every group used to stay open.
+- **The rider signup flow** reads the chosen rade from the radio group by walking the
+  nodes, not by querying the `<form>` (the radios render in the neighbouring column) or
+  an `input[…]:checked` pseudo-selector. The selected rade is highlighted, the running
+  total names it, the reason the button is disabled is stated, and horse/club are
+  validated before the payment request.
 
 ### Operations
 
@@ -214,6 +289,25 @@ assertion:
 public method is callable as `method($request, $ctx)` — the Kernel only passes those two
 arguments, and route parameters arrive via `$request->attr()`. A controller declaring a
 third required parameter 500s every route that uses it.
+
+`events-contract.test.js` renders the signups, standings, competition and horse pages
+for real and pins the contracts that broke them:
+
+- `Pages.signups.load()` referencing `SCOLS`, which was declared inside
+  `Pages.competitions.render()` and therefore out of scope — the `.then()` threw and a
+  200 response still left the grid on its loading skeleton forever. `SCOLS` now lives at
+  module scope, which is also what makes the rider / horse / competition cells links;
+- ordering and paging must be **issued to the server** (`sort` / `dir` / `page` on a new
+  request) rather than applied to the rows already on screen, and the nested
+  `filters.sort` object must not leak into the query string as `[object Object]`;
+- the competition page must group its signups per rade with the flat-list toggle, and
+  must not offer the old "go to /signups" header link;
+- the horse gallery must cap at five images and mark the cover.
+
+`dom-stub.js` backs these suites, and two of its gaps mattered: a descendant selector
+(`#tbl [data-page]`) only stepped into the *first* child of the previous match, so pager
+buttons never had their click handler bound, and `innerHTML`/`appendChild` did not
+re-parent parsed nodes, so `#tbl` was not an ancestor of the pager at all. Both are fixed.
 
 > Note: this project's `php.ini` runs with `zend.assertions=-1`, which compiles
 > `assert()` away. `FrontendContractTest` therefore throws explicit exceptions instead of
