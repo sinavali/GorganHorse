@@ -349,7 +349,13 @@ final class AuthService
         $user = $this->db->selectOne('SELECT * FROM users WHERE id = :id', ['id' => (int) $session['user_id']]);
         if ($user === null) { return null; }
 
-        $this->db->update('sessions', ['last_activity_at' => now_utc()], 'id = :id', ['id' => $sessionId]);
+        /* Batch the activity write: refreshing last_activity_at on every
+           authenticated request turns read traffic into SQLite writes and WAL
+           growth. Five minutes of granularity is enough for the audit trail. */
+        $lastActivity = strtotime((string) ($session['last_activity_at'] ?? '')) ?: 0;
+        if (time() - $lastActivity >= 300) {
+            $this->db->update('sessions', ['last_activity_at' => now_utc()], 'id = :id', ['id' => $sessionId]);
+        }
         $payload = json_decode((string) $session['payload'], true) ?: [];
         return [
             'session' => $session,

@@ -28,6 +28,23 @@ use App\Exceptions\NotFoundException;
  */
 final class ResultService
 {
+    /**
+     * Whitelisted ORDER BY expressions for the standings grid. Keys match the
+     * SPA `sortKey` values; each maps to a select-list alias or real column.
+     *
+     * @var array<string,string>
+     */
+    private const STANDINGS_SORTABLE = [
+        'id' => 's.id',
+        'rider_name' => 'rider_name',
+        'horse_name' => 'horse_name',
+        'competition_title' => 'competition_title',
+        'rade_name' => 'rade_name',
+        'start_at' => 'c.start_at',
+        'position' => '(CASE WHEN s.position IS NULL THEN 999999 ELSE s.position END)',
+        'is_winner' => 's.is_winner',
+    ];
+
     private Database $db;
     private SettingService $settings;
     private LogService $log;
@@ -241,10 +258,17 @@ final class ResultService
     /**
      * Standings for a rider, horse, or rider-horse pair.
      *
-     * @param array $scope {rider_user_id?,horse_id?}
-     * @return array<int,array>
+     * Paginated and sortable server-side: the raw result set is every confirmed
+     * signup in the province, so the grid cannot hold it in the browser.
+     *
+     * @param array $scope  {rider_user_id?,horse_id?}
+     * @param int   $page   Page (1-based).
+     * @param int   $perPage Page size.
+     * @param string $sort  Sort key (whitelisted, see self::STANDINGS_SORTABLE).
+     * @param string $dir   'asc' or 'desc'.
+     * @return array{rows:array,total:int,page:int,per_page:int}
      */
-    public function standings(array $scope): array
+    public function standings(array $scope, int $page = 1, int $perPage = 25, string $sort = '', string $dir = ''): array
     {
         $where = ["s.status = 'confirmed'"];
         $params = [];
@@ -256,14 +280,37 @@ final class ResultService
             $where[] = 's.horse_id = :h';
             $params['h'] = (int) $scope['horse_id'];
         }
-        return $this->db->select(
-            'SELECT s.id, s.position, s.is_winner, c.title AS competition_title, c.start_at, r.name AS rade_name,
-                    h.name AS horse_name, (u.first_name || \' \' || u.last_name) AS rider_name
-             FROM signups s JOIN competitions c ON c.id = s.competition_id JOIN rades r ON r.id = s.rade_id
-             JOIN horses h ON h.id = s.horse_id JOIN users u ON u.id = s.rider_user_id
-             WHERE ' . implode(' AND ', $where) . ' ORDER BY c.start_at DESC',
-            $params
+        $whereSql = implode(' AND ', $where);
+        $joins = ' FROM signups s JOIN competitions c ON c.id = s.competition_id JOIN rades r ON r.id = s.rade_id
+             JOIN horses h ON h.id = s.horse_id JOIN users u ON u.id = s.rider_user_id';
+        $total = (int) $this->db->scalar('SELECT COUNT(*)' . $joins . ' WHERE ' . $whereSql, $params);
+        $page = max(1, $page);
+        $perPage = max(1, min(200, $perPage));
+        $offset = ($page - 1) * $perPage;
+        $rows = $this->db->select(
+            'SELECT s.id, s.position, s.is_winner, s.competition_id, s.horse_id, s.rider_user_id,
+                    c.title AS competition_title, c.start_at, r.name AS rade_name,
+                    h.name AS horse_name, (u.first_name || \' \' || u.last_name) AS rider_name'
+            . $joins . ' WHERE ' . $whereSql
+            . ' ORDER BY ' . self::standingsOrderBy($sort, $dir)
+            . ' LIMIT :limit OFFSET :offset',
+            $params + ['limit' => $perPage, 'offset' => $offset]
         );
+        return ['rows' => $rows, 'total' => $total, 'page' => $page, 'per_page' => $perPage];
+    }
+
+    /**
+     * Translate a client sort request into a safe ORDER BY clause for standings.
+     *
+     * @param string $sort Sort key.
+     * @param string $dir  'asc' or 'desc'.
+     * @return string
+     */
+    private static function standingsOrderBy(string $sort, string $dir): string
+    {
+        $column = self::STANDINGS_SORTABLE[$sort] ?? 'c.start_at';
+        $direction = strtolower($dir) === 'asc' ? 'ASC' : 'DESC';
+        return $column . ' ' . $direction . ', s.id ' . $direction;
     }
 
     /**

@@ -23,6 +23,17 @@ declare(strict_types=1);
  *      for its internal-link handler. The installer must stay an SPA page
  *      rather than a JSON endpoint.
  *   4. JS syntax. Every SPA script is parsed with `node --check`.
+ *   5. Grid ordering/pagination. tests/Frontend/events-contract.test.js renders
+ *      the signups, standings, competition, rider-signup, horse-grid and horse
+ *      pages for real and proves that ordering and paging are issued as
+ *      `sort`/`dir`/`page` query params (server-side) rather than a client-side
+ *      reorder; that lazy filter pickers resolve their options; that the
+ *      competition page groups its signups per rade; that the rider signup form
+ *      actually carries the chosen rade to the API; that health records render;
+ *      and that share codes stay masked and off paper.
+ *   6. Vendored assets. Quill and the Vazirmatn woff2 files are fetched by the
+ *      browser directly, so a truncated or corrupt download would break the
+ *      editor / typography silently. They are parsed / size-checked here.
  *
  * Note on assertions: this file deliberately uses explicit exceptions rather
  * than assert(). The project's php.ini runs with zend.assertions=-1, which
@@ -54,10 +65,12 @@ final class FrontendContractTest
 
         self::controllerArity();
         self::spaRouteParity();
+        self::vendoredAssets($node);
         self::runNode($node, 'tests/Frontend/filter-bar.test.js', 'filter-bar contract');
         self::runNode($node, 'tests/Frontend/picker-contract.test.js', 'picker contract');
         self::runNode($node, 'tests/Frontend/router-contract.test.js', 'router contract');
         self::runNode($node, 'tests/Frontend/inbox-contract.test.js', 'inbox contract');
+        self::runNode($node, 'tests/Frontend/events-contract.test.js', 'events contract');
         self::runNode($node, 'tests/Frontend/spa-contract.test.js', 'SPA contract');
         self::jsSyntax($node);
 
@@ -187,6 +200,55 @@ final class FrontendContractTest
             (bool) preg_match('/API\.get\(\'\/panel\/requirements\'\)/', $app),
             'app.js must read install state from /panel/requirements'
         );
+    }
+
+    /**
+     * The vendored browser assets must be present, parseable and plausible.
+     *
+     * Quill is loaded at runtime by ensureQuill() and the fonts by @font-face, so
+     * neither is covered by any PHP or Node test: a truncated download would only
+     * show up as an empty editor or a silent Tahoma fallback in production.
+     *
+     * @param string $node Node binary path.
+     * @return void
+     */
+    private static function vendoredAssets(string $node): void
+    {
+        $assets = BASE_PATH . '/public/views/assets';
+
+        $quill = $assets . '/vendor/quill.js';
+        self::require(is_file($quill), 'Vendored Quill editor is missing: ' . $quill);
+        self::require(filesize($quill) > 100000, 'public/views/assets/vendor/quill.js looks truncated');
+        self::require(is_file($assets . '/vendor/quill.js.LICENSE.txt'), 'Quill licence file is missing');
+        $out = [];
+        $code = 0;
+        @exec(escapeshellarg($node) . ' --check ' . escapeshellarg($quill) . ' 2>&1', $out, $code);
+        self::require($code === 0, 'Vendored Quill editor does not parse: ' . trim(implode(' ', $out)));
+
+        $fonts = $assets . '/fonts';
+        foreach (['vazirmatn-arabic-var.woff2', 'vazirmatn-latin-var.woff2'] as $name) {
+            $path = $fonts . '/' . $name;
+            self::require(is_file($path), 'Vendored font is missing: ' . $path);
+            self::require(filesize($path) > 5000, $name . ' looks truncated');
+            $magic = (string) file_get_contents($path, false, null, 0, 4);
+            self::require(
+                $magic === 'wOF2',
+                $name . ' is not a woff2 file (magic "' . $magic . '")'
+            );
+        }
+        self::require(is_file($fonts . '/LICENSE.txt'), 'Font licence file is missing');
+
+        foreach (['app.css', 'public.css'] as $sheet) {
+            $css = (string) file_get_contents($assets . '/css/' . $sheet);
+            /* Both sheets asked for Vazirmatn in their font stacks while nothing
+               declared it, so every screen silently fell back to Tahoma. */
+            self::require(
+                (bool) preg_match('/@font-face\s*\{[^}]*font-family:\s*Vazirmatn/', $css),
+                $sheet . ' asks for Vazirmatn but never declares it (silent Tahoma fallback)'
+            );
+        }
+
+        echo "  vendored quill.js + Vazirmatn woff2 present, parseable and licensed\n";
     }
 
     /**

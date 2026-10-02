@@ -30,6 +30,7 @@ use App\Exceptions\DomainException;
 use App\Exceptions\ForbiddenException;
 use App\Exceptions\NotFoundException;
 use App\Exceptions\ValidationException;
+use App\Services\Report\ReportEngine;
 
 /**
  * Class: HorseService
@@ -91,7 +92,20 @@ final class HorseService
         if (!empty($filters['status']) && $filters['status'] !== 'all') { $where[] = 'h.status = :status'; $params['status'] = $filters['status']; }
         else { $where[] = "h.status != 'soft_deleted'"; }
         foreach (['gender', 'race', 'color'] as $field) {
-            if (!empty($filters[$field])) { $where[] = "h.$field = :$field"; $params[$field] = $filters[$field]; }
+            if (empty($filters[$field])) { continue; }
+            /* The controlled vocabularies live in horse_genders / horse_races /
+               horse_colors with an `id`, but horses store the label itself
+               ("نریان"), so a picker that sends the lookup id matched nothing.
+               Accept either: a numeric value is resolved to its label first. */
+            $value = (string) $filters[$field];
+            if (ctype_digit($value)) {
+                $table = ['gender' => 'horse_genders', 'race' => 'horse_races', 'color' => 'horse_colors'][$field];
+                $name = $this->db->scalar("SELECT name FROM $table WHERE id = :i", ['i' => (int) $value]);
+                if ($name === null) { $where[] = '1=0'; continue; }
+                $value = (string) $name;
+            }
+            $where[] = "h.$field = :$field";
+            $params[$field] = $value;
         }
         if (!empty($filters['microchip'])) { $where[] = 'h.microchip_number LIKE :mc'; $params['mc'] = '%' . $filters['microchip'] . '%'; }
         if (!empty($filters['search'])) { $where[] = 'h.name LIKE :q'; $params['q'] = '%' . $filters['search'] . '%'; }
@@ -639,7 +653,7 @@ final class HorseService
     public function performanceHistory(int $horseId): array
     {
         return $this->db->select(
-            'SELECT s.id, s.position, s.is_winner, s.created_at, c.title AS competition_title, r.name AS rade_name
+            'SELECT s.id, s.position, s.is_winner, s.created_at, s.competition_id, c.title AS competition_title, r.name AS rade_name
              FROM signups s JOIN competitions c ON c.id = s.competition_id JOIN rades r ON r.id = s.rade_id
              WHERE s.horse_id = :h AND s.status IN (\'paid\',\'confirmed\')
              ORDER BY c.start_at DESC',
@@ -657,11 +671,17 @@ final class HorseService
     public function exportCsv(array $filters, array $actor): array
     {
         $rows = $this->list($filters, $actor, 1, 10000)['rows'];
+        /* Whitelisted columns only — `share_code` is a secret and must never
+           reach a spreadsheet. ReportEngine::toCsv applies the same rule to
+           report exports. */
         $header = ['id', 'name', 'microchip_number', 'gender', 'race', 'color', 'owner_name', 'status'];
         $out = "\xEF\xBB\xBF" . implode(',', $header) . "\n";
         foreach ($rows as $r) {
             $line = [];
-            foreach ($header as $col) { $line[] = '"' . str_replace('"', '""', (string) ($r[$col] ?? '')) . '"'; }
+            foreach ($header as $col) {
+                $value = ReportEngine::isSecretColumn($col) ? '' : (string) ($r[$col] ?? '');
+                $line[] = '"' . str_replace('"', '""', $value) . '"';
+            }
             $out .= implode(',', $line) . "\n";
         }
         return ['filename' => 'horses-' . gmdate('Ymd-His') . '.csv', 'content' => $out];

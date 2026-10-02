@@ -86,8 +86,11 @@ final class ResultController extends BaseController
      * Standings (per rider, horse, or pair).
      *
      * Route:   GET /panel/standings
+     * Query:   rider_user_id, horse_id, page, per_page,
+     *          sort (rider_name|horse_name|competition_title|rade_name|start_at|position|is_winner|id),
+     *          dir (asc|desc)
      * Auth:    auth
-     * Returns: JSON envelope
+     * Returns: JSON envelope { data: { rows, total, page, per_page } }
      */
     public function printStandings(Request $request, MiddlewareContext $ctx): Response
     {
@@ -95,7 +98,14 @@ final class ResultController extends BaseController
             'rider_user_id' => (int) $request->query('rider_user_id', 0),
             'horse_id' => (int) $request->query('horse_id', 0),
         ];
-        return $this->ok($this->c->get('results')->standings($scope), $ctx);
+        $result = $this->c->get('results')->standings(
+            $scope,
+            $this->page($request),
+            $this->perPage($request),
+            (string) $request->query('sort', ''),
+            (string) $request->query('dir', '')
+        );
+        return $this->ok($result, $ctx, 200, ['total' => $result['total']]);
     }
 
     /**
@@ -131,7 +141,7 @@ final class ResultController extends BaseController
             $filename = 'rider-ranking-' . gmdate('Ymd') . '.csv';
             $path = BASE_PATH . '/cache/' . $filename;
             @file_put_contents($path, $lines);
-            return Response::download($path, $filename);
+            return $this->tempDownload($path, $filename);
         }
 
         return $this->ok(['rows' => $rows, 'total' => count($rows), 'limit' => $limit], $ctx);

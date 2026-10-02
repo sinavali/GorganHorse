@@ -64,6 +64,13 @@ The panel is **authenticated-only** for all users (Admin, Manager, Rider, Club).
 - Currency: **IRT (Iranian Toman)**, integers only
 - Deployment: **copy-paste monolithic**, no build step required at runtime
 - Frontend stack: **PHP-templated views + Alpine.js + Tailwind + AG Grid + SheetJS**
+  - *As built:* the frontend is a no-build, no-npm SPA under `public/views/` — plain
+    ES5-compatible JavaScript, hand-written CSS and **Quill 2.0.3** as the only vendored
+    front-end library. Alpine.js, Tailwind, AG Grid and SheetJS were dropped: each would
+    have required a build step or a registry at runtime, which P22/P23 forbid. The
+    behaviour they were specified for is implemented natively in `ui.js` (grids, modals,
+    toasts, datepicker, charts), in `pages-*.js` (SheetJS' role is played by server-side
+    CSV/XLSX writers in `ReportEngine`). See Technical §33.2 for the as-built front end.
 
 ---
 
@@ -368,25 +375,35 @@ Merged structure per P23. Target ~40 PHP files in `app/`.
 ├── docs/
 │   ├── README.md                      # documents index
 │   ├── Backend Blueprint — Gorgan Horse Federation Panel.md
-│   ├── Technical — Gorgan Horse Federation Panel.md
-│   ├── User Usage — Gorgan Horse Federation Panel.md
-│   └── Project Proposal — Gorgan Horse Federation Panel.md
+│   ├── Technical Specification — Gorgan Horse Federation Panel.md
+│   ├── User Usage Specification — Gorgan Horse Federation Panel.md
+│   ├── Project Proposal — Gorgan Horse Federation Panel.md
+│   ├── Features.md                    # per-feature implementation status
+│   ├── The Loop.md
+│   └── nginx.conf.sample
 ├── public/
 │   ├── index.php                      # single front controller
 │   ├── .htaccess
-│   ├── favicon.ico
-│   └── assets/
-│       ├── css/
-│       │   ├── tailwind.css
-│       │   ├── panel.css
-│       │   └── print.css
-│       ├── js/
-│       │   ├── app.js
-│       │   ├── grid.js
-│       │   ├── qr.js
-│       │   └── vendor/
-│       ├── fonts/
-│       └── img/
+│   └── views/                         # no-build SPA (see §1.1 as-built note)
+│       ├── index.html                 # SPA shell
+│       └── assets/
+│           ├── favicon.svg
+│           ├── css/
+│           │   ├── app.css            # design system, RTL, dark mode, print
+│           │   └── public.css         # public competition page
+│           ├── js/
+│           │   ├── i18n.js            # Jalali calendar, Persian digits
+│           │   ├── api.js             # JSON API client
+│           │   ├── ui.js              # UI kit (tables, forms, modals, editor)
+│           │   ├── auth.js
+│           │   ├── pages-core.js
+│           │   ├── pages-horses.js
+│           │   ├── pages-events.js
+│           │   ├── pages-finance.js
+│           │   ├── pages-system.js
+│           │   └── app.js             # shell + router (loads last)
+│           ├── fonts/                 # vendored Vazirmatn woff2 + licence
+│           └── vendor/                # vendored Quill 2.0.3 + licence
 ├── app/
 │   ├── Bootstrap/
 │   │   └── App.php
@@ -800,11 +817,15 @@ HTTP statuses: 200, 201, 204, 302 (HTML), 400, 401, 403, 404, 409, 422, 423, 429
 
 **Payments (templates)** — `GET/POST /panel/payments`, `GET/PUT/DELETE /panel/payments/{id}`, `GET /panel/payments/{id}/print`, `GET /panel/payments/print-list`, `POST /panel/payments/bulk`
 
-**Competitions** — `GET/POST /panel/competitions`, `GET/PUT/DELETE /panel/competitions/{id}`, `POST /panel/competitions/{id}/pause`, `POST /panel/competitions/{id}/resume`, `POST /panel/competitions/{id}/cancel`, `POST /panel/competitions/{id}/clone`, `GET /panel/competitions/{id}/print`, `GET /panel/competitions/{id}/signup-sheet/print`, `POST /panel/competitions/bulk`
+**Competitions** — `GET/POST /panel/competitions`, `GET/PUT/DELETE /panel/competitions/{id}`, `POST /panel/competitions/{id}/pause`, `POST /panel/competitions/{id}/resume`, `POST /panel/competitions/{id}/cancel`, `POST /panel/competitions/{id}/clone`, `POST /panel/competitions/{id}/banner`, `DELETE /panel/competitions/{id}/banner`, `GET /panel/competitions/{id}/print`, `GET /panel/competitions/{id}/signup-sheet/print`, `POST /panel/competitions/bulk`
+
+The wide banner is a single optional image per competition, stored as `competitions.banner_media_id`. `POST` replaces (and deletes) the previous media row; `clone` deliberately does **not** copy it, because the clone would otherwise share one media row with its source and clearing either banner would delete the other's image.
 
 **Competition-Rades** — `POST /panel/competitions/{id}/rades`, `PUT /panel/competitions/{id}/rades/{comp_rade_id}`, `DELETE /panel/competitions/{id}/rades/{comp_rade_id}`, `POST /panel/competitions/{id}/rades/{comp_rade_id}/barrage`
 
 **Signups** — `GET /panel/signups`, `GET /panel/signups/{id}`, `POST /panel/signups/{id}/confirm`, `POST /panel/signups/{id}/reject`, `POST /panel/signups/{id}/position`, `POST /panel/signups/bulk`
+
+`GET /panel/signups` and `GET /panel/standings` both accept `page`, `per_page`, `sort` and `dir`, and both return the `{rows, total, page, per_page}` envelope. Sort keys are resolved through a server-side whitelist (`SignupService::SORTABLE`, `ResultService::STANDINGS_SORTABLE`) that maps a client key to a fixed `ORDER BY` expression; an unknown key falls back to the default column and the direction is forced to `ASC`/`DESC`, so a hand-crafted query string can neither inject SQL nor produce an invalid statement. Ordering and paging therefore happen in SQL and a pager can never disagree with a sort header.
 
 **Rider signup flow** — `GET /panel/rider/competitions`, `GET /panel/rider/competitions/{id}`, `POST /panel/rider/competitions/{id}/signup`, `GET /panel/rider/signups`, `GET /panel/rider/signups/{id}`
 
@@ -827,6 +848,12 @@ HTTP statuses: 200, 201, 204, 302 (HTML), 400, 401, 403, 404, 409, 422, 423, 429
 **Maintenance** — `POST /panel/reset`, `POST /panel/demo/seed`, `POST /panel/demo/clear`
 
 **Print** — `GET /panel/print/{entity}/{id}`
+
+**Media** — `GET /media/{id}` (authenticated stream), `POST /panel/media` (upload an image embedded in a rich-text field; staff only, images only)
+
+**Public (guest)** — `GET /c/{slug}` (shareable competition page), `GET /c/{slug}/banner` (streams that competition's banner)
+
+Uploads live outside the web root and `GET /media/{id}` requires a session, so the one asset an anonymous visitor needs has its own route. `GET /c/{slug}/banner` resolves only `competitions.banner_media_id` — it cannot be used to guess arbitrary media ids — and re-checks the resolved path stays under `uploads/`.
 
 **QR** — `GET /panel/qr?data={url}`
 
@@ -893,7 +920,7 @@ Per request, in order:
 
 ### 13.1 Unified report engine
 
-One page: `/panel/reports`. Rich filters, rich columns, sidebar presets. AG Grid with column toggling, drag-and-drop reorder, sort, filter, pagination (default page 1). Grid state (columns, order, filters) persists in `localStorage` per user. Page number always resets to 1.
+One page: `/panel/reports`. Rich filters, rich columns, sidebar presets. Grid with column toggling, sort, filter, pagination (default page 1). Grid state (columns, order, filters) persists in `localStorage` per user. Page number always resets to 1.
 
 **Report types:** `signups`, `revenue`, `results`, `horses`, `riders`, `clubs`, `payments`, `bans`.
 
@@ -1549,11 +1576,11 @@ Linear task list for the implementer. Each item links to the section(s) that def
 
 ### 26.20 Frontend polish
 
-- [ ] Tailwind CSS build (committed)
-- [ ] Alpine.js components
-- [ ] AG Grid wrapper
-- [ ] SheetJS exports
-- [ ] Inline help tooltips
+- [x] Design system CSS (hand-written, no Tailwind build)
+- [x] SPA shell + History-API router (no Alpine.js)
+- [x] Grid widget with server-side sorting/paging (no AG Grid)
+- [x] CSV/XLSX exports (server-side writers, no SheetJS)
+- [x] Inline help tooltips
 
 ### 26.21 Installer
 

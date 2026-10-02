@@ -38,8 +38,8 @@ Edit policy:
 ### Feature: Zero-CDN Vendored Library System
 
 - Status: Implemented
-- Description: All frontend and backend libraries (Alpine.js 3, AG Grid Community, SheetJS, qrcode.js, Vazirmatn font, Tailwind CSS, morilog/jalali, libphonenumber, HTMLPurifier, Intervention Image, Parsedown) are vendored as plain static files under vendor/ and public/assets/js/vendor/. No CDN, no npm registry, no composer packagist access is needed at runtime.
-- Notes: Tailwind CSS is built once during development and committed; no build step at runtime. No Node.js or Composer required on the production server. See Technical §2.2, §33.
+- Description: Every third-party library ships as a plain file inside the repository — no CDN, no npm registry, no Composer/packagist access, at build time or at runtime. Front-end assets live under `public/views/assets/vendor/` (Quill 2.0.3) and `public/views/assets/fonts/` (Vazirmatn); PHP libraries live under `vendor/`.
+- Notes: Most of the originally specified front-end libraries (Alpine.js, Tailwind, AG Grid, SheetJS, qrcode.js) were **dropped rather than vendored**: their behaviour is implemented natively in `ui.js` / server-side writers, so the panel needs neither a bundler nor a registry. The same reasoning removed `HTMLPurifier`, `Intervention Image` and `Parsedown` on the PHP side, replaced by the self-written shims in `app/Support/vendor-shims/` (`HtmlSanitizer`, `ImageProcessor`, `Markdown`) that the autoloader always loads. See Technical §2.2, §2.3, §33.
 - Considerations: Library updates require manual vendor replacement. No automatic security patches from package managers. Periodic manual review of vendored libraries recommended.
 - Status Description: Fully implemented. Every library is served from local files, ensuring the panel functions correctly even when Iranian ISPs filter or throttle access to foreign CDNs and registries.
 
@@ -118,8 +118,8 @@ Edit policy:
 ### Feature: Report Engine with Grid and Export
 
 - Status: Implemented
-- Description: Unified report engine with 8 presets (signups, revenue, results, horses, riders, clubs, payments, bans). AG Grid with server-side row model, whitelist-driven SQL queries (no raw user input in SQL), Shamsi date filter conversion, column visibility/order/filter/sort persisted in localStorage per user per report, XLSX and CSV export via signed URLs (1-hour expiry), report sharing (live filter state sharing between users), and summary KPI tiles per report.
-- Notes: Role scoping applied transparently. Export: XLSX via SheetJS on frontend, CSV server-generated. Signed URL: HMAC-signed, expires in 1 hour. See Technical §18, User Usage §12. Filtering is two-layered: a simple bar (search, date-range presets, status chips, page size, clear-all) plus an advanced drawer with every declared filter column and operator (`eq`, `ne`, `contains`, `gt`, `gte`, `lt`, `lte`, `in`, `between`). Full state lives in the query string, and the result grid has a custom print layout.
+- Description: Unified report engine with 8 presets (signups, revenue, results, horses, riders, clubs, payments, bans). Server-side sorted/paged grid, whitelist-driven SQL queries (no raw user input in SQL), Shamsi date filter conversion, column visibility/order/filter/sort persisted in localStorage per user per report, CSV export via signed URLs (1-hour expiry), report sharing (live filter state sharing between users), and summary KPI tiles per report.
+- Notes: Role scoping applied transparently. Export is generated server-side (`ReportEngine::toCsv()`, BOM-prefixed and culture-aware), so it needs no client-side spreadsheet library. Only CSV is produced — Excel, WPS and Sheets all open it directly, and the panel already prints any report as a formatted A4 document. Signed URL: HMAC-signed, expires in 1 hour. See Technical §18, User Usage §12. Filtering is two-layered: a simple bar (search, date-range presets, status chips, page size, clear-all) plus an advanced drawer with every declared filter column and operator (`eq`, `ne`, `contains`, `gt`, `gte`, `lt`, `lte`, `in`, `between`). Full state lives in the query string, and the result grid has a custom print layout.
 - Considerations: Grid state persists in localStorage. Page number always resets to 1 when filters change. Riders can share reports only with Managers/Admins.
 - Status Description: Fully implemented. Complete reporting system with 8 report types, filtering, export, sharing, and role-based scoping.
 
@@ -209,6 +209,8 @@ Edit policy:
 
 - Status: Implemented
 - Description: Media upload system with MIME type validation, UUID filename replacement, server-side MIME sniffing, extension coercion from MIME, SVG sanitization via whitelist, .htaccess protection in uploads/ (no PHP execution), per-kind size limits (image 10MB, doc 25MB), per-user quota (500MB), horse gallery max 5 images. Avatars, horse images, club media, documents all supported.
+- Notes: The horse gallery is a real gallery on the horse page, not a strip of thumbnails: `galleryHtml()` in `pages-horses.js` renders responsive tiles, marks the first as "تصویر اصلی" (cover), numbers the rest, hides the add tile at the `horses.max_images` (5) cap, reports an "n of 5" counter, and opens a keyboard-navigable lightbox (Esc / ← / →, backdrop click). Multi-file selection uploads sequentially and reports how many succeeded, so a partial failure still refreshes the grid.
+- Notes: The horse grid also filters by gender, race, colour, owner, microchip and page size — the list endpoint supported all of them, the grid simply never exposed them. Because `horses.gender|race|color` store the *label* while `horse_genders` / `horse_races` / `horse_colors` are id-keyed, `HorseService::list()` resolves a numeric filter value to its label before comparing; sending the lookup id used to match zero rows.
 - Notes: Original filename stored as metadata only. Downloads served via authenticated routes (no direct path leakage). See Technical §21, Blueprint §19.
 - Considerations: Max dimension configurable (default 2560). Quality configurable (default 82). Format: original or webp. GD first, Imagick if present.
 - Status Description: Fully implemented. Complete media upload system with MIME validation, UUID renaming, size limits, and PHP execution prevention.
@@ -310,30 +312,30 @@ Edit policy:
 ### Feature: Competition Calendar View
 
 - Status: Implemented
-- Description: Visual calendar display (monthly/weekly) showing all upcoming competitions with their dates, venues, and statuses. Admin/Manager can click a date to see competition details or create a new competition for that date. This feature was specified in the User Usage spec (§7.12 header action "Calendar view") but no route, controller, view, or JavaScript component exists.
+- Description: Visual calendar display (monthly/weekly) showing all upcoming competitions with their dates, venues, and statuses. Admin/Manager can click a date to see competition details or create a new competition for that date. Specified in the User Usage spec (§7.12 header action "Calendar view").
 - Notes: Implemented as `GET /panel/competitions/calendar` (month grid, venue/status filters, month navigation, deadline countdowns) rendered by the `/calendar` SPA route.
 - Considerations: Especially useful in Iran where competitions follow Jalali calendar dates and seasonal schedules (indoor winter, outdoor spring/summer).
-- Status Description: Not implemented. No route, controller, view, or calendar component exists despite being specified in the User Usage document as a header action on the competitions page.
+- Status Description: Fully implemented. Month grid with Jalali dates, venue and status filters, month navigation and registration-deadline countdowns.
 
 ---
 
 ### Feature: Global Entity Search
 
-- Status: Not Implemented
-- Description: Unified search bar in the topbar for searching across all entities — competitions, riders, horses, clubs, signups — by name, phone, microchip, or other identifiers. Currently the topbar describes a "Global search (spotlight)" in the spec (§5.3) but no search route, controller, or view exists. Users must navigate to individual entity pages to use their specific search filters.
-- Notes: Would need a unified search controller, route, and search index. Could use SQLite FTS5 for performance.
-- Considerations: A global search would dramatically improve usability for admins and managers who work across all entity types daily.
-- Status Description: Not implemented. The topbar spec mentions global search but no search endpoint, controller, or view exists. Users must use entity-specific filters.
+- Status: Implemented
+- Description: Unified search across all entities — competitions, riders, horses, clubs, signups — by name, phone, microchip, or other identifiers, reachable from the topbar (spec §5.3 "Global search (spotlight)").
+- Notes: `GET /api/search?q=` (`SearchController`) returns grouped results for the five entity types, each capped at 10 rows. The topbar's `Ctrl+K` command palette (`#cmdk`) queries it live and deep-links every hit into the matching detail page; `/search` renders the same groups as a full page. The query must be at least 3 characters, and matching uses an anchored prefix (`term%`, not `%term%`) so the scan stays index-friendly; microchip numbers keep a contains match because operators search by trailing digits. No FTS5 index — plain `LIKE` queries remain fast enough at this data size (audit finding #10).
+- Considerations: A global search dramatically improves usability for admins and managers who work across all entity types daily.
+- Status Description: Fully implemented as a `Ctrl+K` spotlight over `/api/search`, with a full `/search` page behind the topbar's advanced-search button.
 
 ---
 
 ### Feature: PDF Invoice Generation for Payments
 
 - Status: Not Implemented
-- Description: Generate formal PDF invoices for ZarinPal payment transactions. In Iran, businesses need PDF invoices for tax reporting and financial record-keeping. Each invoice would include: order ID, rider info, competition details, amount in Toman, payment date, ZarinPal authority and ref ID, and federation details. Currently only HTML print views and XLSX/CSV exports exist.
+- Description: Generate formal PDF invoices for ZarinPal payment transactions. In Iran, businesses need PDF invoices for tax reporting and financial record-keeping. Each invoice would include: order ID, rider info, competition details, amount in Toman, payment date, ZarinPal authority and ref ID, and federation details. Currently the panel offers HTML print views and CSV exports.
 - Notes: Would require a PDF generation library (TCPDF or mPDF, both PHP-native). Could use a simple HTML-to-PDF approach with wkhtmltopdf if available on the server.
 - Considerations: PDF invoices are standard in Iranian business practice. This would replace manual invoice creation and improve financial tracking for the federation.
-- Status Description: Not implemented. Currently only HTML print views and XLSX/CSV exports are available. PDF invoice generation is needed for Iranian tax and accounting requirements.
+- Status Description: Not implemented. Currently only HTML print views and CSV exports are available. PDF invoice generation is needed for Iranian tax and accounting requirements.
 
 ---
 
@@ -350,20 +352,76 @@ Edit policy:
 ### Feature: Automatic Scheduled Backups
 
 - Status: Implemented
-- Description: Configurable automatic backup scheduling (daily, weekly, monthly) instead of the current manual-only backup system. Admins would set a backup frequency and optional retention count. Backups would be created automatically at scheduled times and listed on the backups page with creation time and size. Currently all backups require manual Admin action via /panel/backups.
+- Description: Configurable automatic backup scheduling (daily, weekly, monthly) instead of a manual-only backup system. Admins set a backup frequency and optional retention count; backups are created automatically and listed on the backups page with creation time and size.
 - Notes: Implemented by `SchedulerService` (settings `scheduler.auto_backup`, `scheduler.backup_keep`), driven by `cron.php` or `POST /panel/cron?key=…`. Jobs are idempotent per day, so running the scheduler frequently is safe.
 - Considerations: Automatic backups are critical for data safety. Request-triggered scheduling is the only viable approach in this architecture (no cron, no daemon).
-- Status Description: Not implemented. All backups are currently manual. No scheduling mechanism exists for automatic backup creation.
+- Status Description: Fully implemented. `scheduler.auto_backup` + `scheduler.backup_keep` drive `SchedulerService::autoBackup()`, run by `cron.php` or `POST /panel/cron`; manual backups from `/panel/backups` still work alongside it.
 
 ---
 
 ### Feature: Rider Cumulative Performance Ranking
 
 - Status: Implemented
-- Description: Cross-competition ranking system for riders based on cumulative results (wins, placements, points). Riders would see their ranking in the federation standings, updated in real-time as results are published. Ranking could be by total wins, average position, or a custom points system. Currently results are only viewable per-competition with no federation-wide ranking.
+- Description: Cross-competition ranking system for riders based on cumulative results (wins, placements, points). Riders see their ranking in the federation standings, updated as results are published.
 - Notes: Implemented as `KpiService::riderRanking()` served by `GET /panel/standings/ranking` (JSON + CSV) and the `/ranking` page. Points: 1st = 10, 2nd = 6, 3rd = 4, other placements = 2.
 - Considerations: Rider rankings are a key motivator in equestrian sports. This would create federation-wide competition beyond individual events.
-- Status Description: Not implemented. Results exist only at the individual competition level. No cross-competition ranking or federation standings system exists.
+- Status Description: Fully implemented. `/panel/standings/ranking` aggregates published results across every competition (1st = 10, 2nd = 6, 3rd = 4, other placements = 2 points) and is exported as JSON or CSV from the `/ranking` page.
+
+---
+
+### Feature: Server-Side Grid Ordering and Pagination
+
+- Status: Implemented
+- Description: Every grid whose result set can outgrow one screen orders and pages **in SQL**, not in the browser. `GET /panel/signups` and `GET /panel/standings` accept `sort`, `dir` (asc|desc), `page` and `per_page`, and both return the `{rows, total, page, per_page}` envelope the SPA pager needs.
+- Notes: `SignupService::list()` whitelists sort keys through `SignupService::SORTABLE`; `ResultService::standings()` paginates (default 50, capped at 200) through `ResultService::STANDINGS_SORTABLE`. Both resolve to a fixed `ORDER BY <column> <dir>, s.id <dir>` — an unknown key falls back to the default column and a client-side sort of the loaded page is impossible, so a pager and a sort header can never disagree. `ResultController::printStandings` previously returned a flat array of every confirmed signup in the province in one response; it now returns the paginated envelope. The SPA flattens its nested `filters.sort={key,dir}` state into the two query params through `apiParams()` in `pages-events.js`.
+- Considerations: The SPA previously sorted only the rows already on screen, which silently reordered one page of a 6,000-row grid while the pager still claimed to be showing the first 50.
+
+---
+
+### Feature: In-Page Competition Signups Grouped by Rade
+
+- Status: Implemented
+- Description: Staff manage a competition's entries on the competition page itself, grouped by "rade" with a per-rade capacity bar, signup count and remaining places, plus a toggle to a single flat sortable list. The header link to `/signups?competition_id=…` is gone (one "full signups page" link remains inside the section).
+- Notes: `compSignupsSection()` in `pages-events.js` fetches `GET /panel/signups?competition_id=…&per_page=250`, groups by `rade_id`, renders one collapsible `<details class="rade-acc">` per rade in `competition_rades.sort_order`, and collects rows whose rade is not in the list under a "سایر رده‌ها" group so nothing disappears. Approve / reject / position actions stay in place and refresh both the section and the per-rade counts. View state (`?su_view=&su_status=&su_q=`) lives in the URL so a filtered view can be shared.
+- Considerations: Grouped-per-rade is the jury-sheet view; the flat list stays available for bulk administration.
+
+---
+
+### Feature: Share Codes Are Secrets
+
+- Status: Implemented
+- Description: A horse `share_code` and a rider `my_share_code` authorise handing a horse to somebody else. They are masked everywhere and never reach paper, a spreadsheet or a copied DOM.
+- Notes: `UI.secret()` renders the value blurred behind a reveal + copy control, so the digits are not written into the document until a user asks for them. `.secret` is `display:none` under `@media print` (a print stylesheet that only greys the code still prints it). Server-side, `ReportEngine::isSecretColumn()` redacts any share-code column from `toCsv()` and is reused by `HorseService::exportCsv()`, which is already a fixed whitelist that never carried the column.
+- Considerations: A share code is a bearer token for ownership transfer; a CSV is forwarded by email far more freely than the panel is.
+
+---
+
+### Feature: Lightweight Rich Content Editor
+
+- Status: Implemented
+- Description: Competition description / rules / announcement are authored as rich content by non-technical staff: headings, lists, links, quotes and drag-and-drop images.
+- Notes: Quill 2.0.3 is vendored as a plain file at `public/views/assets/vendor/quill.js` (UMD, BSD-3-Clause) and loaded lazily by `ensureQuill()`, so pages with no editor never download it. Images dropped on, pasted into, or picked for the field upload to `POST /panel/media` (staff-only, images only, else the file is deleted and the request rejected) and are embedded as `/media/{id}` URLs, keeping uploads outside the web root and served through the authenticated media route. Storage uses Quill's `getSemanticHTML()`, so no `ql-*` classes reach the database, and the whitelist stays aligned on both ends (`HtmlSanitizer::ALLOWED_TAGS` server-side, `RICH_TAGS` in `richHtml()`). Quill's CSS is not vendored — `quill.snow.css` is LTR-first — so a small RTL theme under `.ql-` selectors applies the panel tokens. The previous `contenteditable` editor remains as a fallback if the vendor file is ever missing.
+- Toolset: undo/redo · paragraph and three heading levels · bold, italic, underline, strikethrough, subscript, superscript, inline code · blockquote, code block · bullet and numbered lists with indent/outdent · divider · link · image · clear formatting · HTML source view · an in-editor Persian help modal · live word/character count. Every control carries a Persian tooltip and Quill's own tooltip module is switched off (`tooltip:false`) so they are not overwritten with English labels.
+- Deliberately **not** offered: font colour, size, alignment, font family, text direction, checklists, video and embedded tables. Those all serialise to inline `style`/`class`/`data-*` attributes that `HtmlSanitizer` strips, so the button would appear to work and the formatting would vanish on save — and the public page would look inconsistent. The toolbar only offers what survives the whitelist.
+- Considerations: CKEditor-class editors are far heavier and would need a build step, which this project forbids.
+
+---
+
+### Feature: Vendored Front-end Fonts
+
+- Status: Implemented
+- Description: The panel and the public competition page render in Vazirmatn (variable, SIL OFL 1.1), served from `public/views/assets/fonts/` as two subset woff2 files (~80 KB together).
+- Notes: Both `app.css` and `public.css` had always asked for `Vazirmatn` in their font stacks while nothing declared it, so every screen fell back to Tahoma. The Arabic subset is preloaded by `public/views/index.html` and `layout()`; both `@font-face` rules use `font-display:swap` and a `unicode-range`, so the Latin file is fetched only when needed and text paints immediately.
+- Considerations: Vendored rather than CDN-linked so a host with no outbound network still shows the intended typeface.
+
+---
+
+### Feature: Competition Banner Image
+
+- Status: Implemented
+- Description: A competition carries at most one wide hero image, shown on the panel competition page and as the hero of the public page.
+- Notes: `competitions.banner_media_id` (migration `competitions.banner_media_id`, also in `schema.sql`). `CompetitionService::setBanner()` / `clearBanner()` are exposed as `POST` / `DELETE /panel/competitions/{id}/banner` and replace (and delete) the previous media row so re-saves never orphan uploads. `clone` deliberately does **not** copy the banner: the clone would otherwise share one media row with its source, and clearing one banner would delete the other's image. Because uploads live outside the web root and `GET /media/{id}` requires auth, the image is streamed to anonymous visitors by the dedicated guest route `GET /c/{slug}/banner`, which resolves only `competitions.banner_media_id` and re-checks the path stays under `uploads/`.
+- Considerations: One image, landscape. Multi-image galleries belong to horses.
 
 ---
 
@@ -380,40 +438,40 @@ Edit policy:
 ### Feature: Competition Entry Deadline Alerts
 
 - Status: Implemented
-- Description: Automated alerts (in-panel notifications and optional SMS) sent when competition registration is approaching its deadline — for example, 48 hours before, 24 hours before, and 1 hour before. Admins and managers would receive reminders; riders would be notified that registration is closing. Currently no deadline tracking or automated alerting exists.
+- Description: Automated alerts (in-panel notifications and optional SMS) sent when competition registration is approaching its deadline. Admins and managers receive reminders; riders are notified that registration is closing.
 - Notes: Implemented by the `deadline_alerts` job in `SchedulerService` (window from `scheduler.deadline_alert_days`), surfaced on the dashboard "needs attention" queue (`KpiService::attention()`).
 - Considerations: Registration deadlines are critical for competition organization. In Iran where planning can be last-minute, advance warnings help ensure full participation.
-- Status Description: Not implemented. Registration deadlines are visible on competition pages but no automated alerts or countdown timers exist.
+- Status Description: Fully implemented. `SchedulerService::deadlineAlerts()` (`scheduler.deadline_alert_days`) sends in-panel notifications once per day for competitions inside the window, and the dashboard "needs attention" queue lists them with their countdowns.
 
 ---
 
 ### Feature: Horse Health and Veterinary Records
 
 - Status: Implemented
-- Description: Track veterinary records, vaccination schedules, health certificates, and insurance documentation for each horse. Essential for federation compliance in Iran where equestrian sports require up-to-date health documentation. Fields would include: vet visit date, diagnosis, treatment, next vaccination date, health certificate expiry, insurance policy number and expiry.
+- Description: Track veterinary records, vaccination schedules, health certificates, and insurance documentation for each horse. Essential for federation compliance in Iran where equestrian sports require up-to-date health documentation. Fields include: vet visit date, diagnosis, treatment, next vaccination date, health certificate expiry, insurance policy number and expiry.
 - Notes: Implemented with a `horse_health_records` table (created by `database/migrations.php`), `HorseHealthService`, `/panel/horses/{id}/health` routes, and a health section on the horse detail page.
 - Considerations: Health certificates are mandatory for competition participation in Iran. This feature would help clubs and managers ensure horses are competition-ready.
-- Status Description: Not implemented. No health, veterinary, or insurance tracking features exist for horses despite being required for federation compliance.
+- Status Description: Fully implemented. Records are created, listed and deleted from the health section of the horse detail page; nothing about the horse's health status is silently dropped.
 
 ---
 
 ### Feature: SMS Delivery Performance Report
 
-- Status: Not Implemented
-- Description: Historical report of SMS delivery performance showing: total SMS sent, delivered, failed, and skipped over time. Cost tracking per message. Delivery rate per notification type. Per-recipient delivery status. Currently SMS logs exist in logs.sqlite.sms_logs but no reporting or analytics interface exists for SMS performance.
+- Status: Partially Implemented
+- Description: Historical report of SMS delivery performance showing: total SMS sent, delivered, failed, and skipped over time. Cost tracking per message. Delivery rate per notification type. Per-recipient delivery status.
 - Notes: Partially covered by the `/sms-log` page: delivery success rate, error breakdown, per-message status and CSV export of the delivery log. It is a dedicated page rather than a `ReportEngine` report type; per-recipient status and cost tracking are still missing.
 - Considerations: SMS costs money via MelyPayamak credits. A delivery report helps admins control costs and understand notification effectiveness.
-- Status Description: Not implemented. SMS logs are stored but no reporting interface exists. Admins cannot review SMS delivery rates or costs.
+- Status Description: Partially implemented. Delivery rates and per-message errors are visible and exportable on `/sms-log`; per-recipient delivery status and credit-cost tracking are still missing.
 
 ---
 
 ### Feature: PDF Report Export
 
 - Status: Not Implemented
-- Description: Export any report as a formatted PDF document (currently only XLSX and CSV are available). PDF would preserve the report layout with column headers, data rows, summary tiles, and report title. Useful for official federation submissions and meetings where printed reports are preferred.
+- Description: Export any report as a formatted PDF document (currently only CSV and the browser's print-to-PDF are available). PDF would preserve the report layout with column headers, data rows, summary tiles, and report title. Useful for official federation submissions and meetings where printed reports are preferred.
 - Notes: Would require a PHP PDF library (TCPDF, mPDF, or wkhtmltopdf integration). Could leverage the existing print.css styles for PDF formatting. See Technical §27 (Print & QR section).
 - Considerations: Iranian federation meetings and regulatory submissions often require printed/PDF documents. PDF export bridges the gap between digital reports and physical documentation.
-- Status Description: Not implemented. Reports support XLSX and CSV export only. PDF export is needed for official documentation workflows.
+- Status Description: Not implemented. Reports export as CSV, or as a formatted A4 document through the browser's print dialog. A server-rendered PDF file is still missing for official documentation workflows.
 
 ---
 
@@ -450,20 +508,20 @@ Edit policy:
 ### Feature: Audit Log Export for Regulatory Compliance
 
 - Status: Partially Implemented
-- Description: Export audit logs in a standardized, portable format (PDF or CSV) for submission to federation authorities or regulatory bodies. Filters by date range, actor, action type, and result. Currently audit logs are viewable in the panel (/panel/audit) but no export functionality exists.
+- Description: Export audit logs in a standardized, portable format (PDF or CSV) for submission to federation authorities or regulatory bodies. Filters by date range, actor, action type, and result.
 - Notes: `GET /panel/audit?format=csv` exports the currently filtered audit log (same filters as the grid) plus a print view. PDF output is still not generated server-side.
 - Considerations: Iranian sports federations may be required to provide audit trails to governing bodies. Export capability ensures compliance with regulatory requirements.
-- Status Description: Not implemented. Audit logs are viewable but cannot be exported. No portable audit trail format exists for regulatory submission.
+- Status Description: Partially implemented. `/panel/audit` exports the currently filtered log as CSV and has a print view; a server-rendered PDF is still missing (see "PDF Report Export").
 
 ---
 
 ### Feature: Automatic Rider Verification After Competition
 
-- Status: Not Implemented
-- Description: Automatically verify riders who have successfully completed at least one competition (signed up, paid, participated). Currently pending riders must wait 48 hours for auto-verification or be manually verified by a Manager. After a rider participates in a competition, their verification status could be automatically upgraded to verified.
-- Notes: Would need a service method triggered after competition results are confirmed or after signup completion. Could be configured as a setting (auto_verify_on_participation).
-- Considerations: This rewards active riders by fast-tracking verification and reduces Manager verification workload. New riders could still be pending for first competition.
-- Status Description: Not implemented. Rider verification is time-based (48 hours) or manual only. No event-driven verification from competition participation exists.
+- Status: Implemented
+- Description: Automatically verify riders who have successfully completed at least one competition (signed up, paid, participated), so a rider does not have to wait for the time-based rule after their first event.
+- Notes: `SchedulerService::autoVerifyRiders()` (`scheduler.auto_verify_on_participation`) promotes pending riders who already hold a confirmed signup, alongside the existing 48-hour and manual verification paths.
+- Considerations: This rewards active riders by fast-tracking verification and reduces Manager verification workload. New riders can still be pending before their first competition.
+- Status Description: Fully implemented as a scheduler job, so verification happens without a Manager's intervention.
 
 ---
 
@@ -490,10 +548,10 @@ Edit policy:
 ### Feature: Registration Countdown Timer
 
 - Status: Implemented
-- Description: Visual countdown timer on competition detail pages showing days, hours, and minutes remaining until registration closes. Visible to all authenticated users (riders, managers, admins). Timer updates in real-time via Alpine.js. When registration closes, timer displays "Registration Closed" in red.
+- Description: Visual countdown timer on competition pages showing days, hours, and minutes remaining until registration closes. Visible to staff in the panel and to the public on the competition's shareable page. When registration closes, the timer displays "Registration Closed".
 - Notes: Implemented as `UI.countdown()` (dependency-free interval timer, Tehran time, fa-IR digits) on the competition detail page, the calendar cells and the attention queue.
 - Considerations: Registration deadlines are critical for riders to plan their participation. A visible countdown creates urgency and reduces missed deadlines.
-- Status Description: Not implemented. Registration deadline dates are visible on competition pages but no countdown timer or urgency indicator exists.
+- Status Description: Fully implemented. `UI.countdown()` ticks in Tehran time with fa-IR digits on the panel competition page, the calendar cells, the attention queue and the public competition page (where it is server-rendered so it is correct before JavaScript runs).
 
 ---
 
@@ -508,4 +566,4 @@ Edit policy:
 ---
 
 <!-- ============ FEATURE COUNT SUMMARY ============ -->
-<!-- Implemented: 32 | Partially Implemented: 3 | Not Implemented: 13 | Total: 48 -->
+<!-- Implemented: 40 | Partially Implemented: 4 | Not Implemented: 10 | Total: 54 -->

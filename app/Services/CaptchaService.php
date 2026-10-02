@@ -260,7 +260,7 @@ final class CaptchaService
     private function appKey(): string
     {
         try {
-            $settings = \App\Support\container('settings');
+            $settings = container('settings');
             if ($settings instanceof \App\Services\SettingService) {
                 return (string) $settings->get('app.key', 'dev');
             }

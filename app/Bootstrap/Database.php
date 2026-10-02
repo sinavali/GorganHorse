@@ -33,6 +33,8 @@ final class Database
     /** @var callable|null function(string $message, array $context, int $ms): void */
     private $slowLogger;
     private int $slowThresholdMs;
+    /** @var array<string,PDOStatement> Prepared-statement cache (bounded). */
+    private array $statements = [];
 
     public function __construct(string $file, ?callable $slowLogger = null, int $slowThresholdMs = 200)
     {
@@ -43,6 +45,20 @@ final class Database
 
     /** @return string Absolute database file path. */
     public function file(): string { return $this->file; }
+
+    /**
+     * Drop the PDO handle so the database file can be replaced safely.
+     *
+     * Used by the backup restore flow before copying a new app.sqlite over the
+     * live file; the handle reopens lazily on the next query.
+     *
+     * @return void
+     */
+    public function close(): void
+    {
+        $this->statements = [];
+        $this->pdo = null;
+    }
 
     /** @return PDO */
     public function pdo(): PDO
@@ -156,7 +172,15 @@ final class Database
 
     private function timed(string $sql, array $params): PDOStatement
     {
-        $stmt = $this->pdo()->prepare($sql);
+        // Reuse prepared statements: the panel issues a stable, small set of
+        // SQL strings, so preparing each one on every call is wasted work.
+        $stmt = $this->statements[$sql] ?? null;
+        if (!$stmt instanceof PDOStatement) {
+            if (count($this->statements) >= 256) {
+                array_shift($this->statements);
+            }
+            $stmt = $this->statements[$sql] = $this->pdo()->prepare($sql);
+        }
         $start = hrtime(true);
         $stmt->execute($params);
         $ms = (int) ((hrtime(true) - $start) / 1_000_000);
@@ -166,8 +190,25 @@ final class Database
         return $stmt;
     }
 
+    /**
+     * Execute a raw statement (no parameters).
+     *
+     * Used for maintenance statements such as VACUUM / ANALYZE / PRAGMA that
+     * SQLite refuses to run while prepared statements are still alive, so the
+     * statement cache is discarded first.
+     *
+     * @param string $sql Raw SQL.
+     * @return void
+     */
+    public function exec(string $sql): void
+    {
+        $this->statements = [];
+        $this->pdo()->exec($sql);
+    }
+
     public function applyScript(string $sql): void
     {
+        $this->statements = [];
         $this->pdo()->exec($sql);
     }
 }

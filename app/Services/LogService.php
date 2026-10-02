@@ -250,12 +250,45 @@ final class LogService
         // rate_limits lives in the main DB; resolve it lazily from the container
         // so LogService stays decoupled from the main connection at construct time.
         try {
-            $main = \App\Support\container('db');
+            $main = container('db');
             if ($main instanceof Database) {
                 $main->delete('rate_limits', 'window_start < :t', ['t' => utc_iso(time() - 3600)]);
             }
         } catch (\Throwable) {
             // Main DB unavailable during cleanup; harmless.
+        }
+        // The DB rows are pruned above, so prune the raw JSON-line files with
+        // the same retention windows or logs/app and logs/audit grow forever.
+        $this->pruneRawLogs('app', $appDays);
+        $this->pruneRawLogs('audit', $auditDays);
+    }
+
+    /**
+     * Delete raw JSON-line log files older than the retention window.
+     *
+     * Files are laid out as logs/{channel}/YYYY-MM/YYYY-MM-DD.log. Empty month
+     * directories are removed along the way. Errors are ignored on purpose:
+     * log retention must never break a request.
+     *
+     * @param string $channel app|audit.
+     * @param int    $days    Retention in days.
+     * @return void
+     */
+    private function pruneRawLogs(string $channel, int $days): void
+    {
+        $root = $this->logsDir . '/' . $channel;
+        if (!is_dir($root)) { return; }
+        $cutoff = time() - max(1, $days) * 86400;
+        foreach (glob($root . '/*/*.log') ?: [] as $file) {
+            $mtime = @filemtime($file);
+            if ($mtime !== false && $mtime < $cutoff) {
+                @unlink($file);
+            }
+        }
+        foreach (glob($root . '/*') ?: [] as $dir) {
+            if (is_dir($dir) && (glob($dir . '/*') ?: []) === []) {
+                @rmdir($dir);
+            }
         }
     }
 

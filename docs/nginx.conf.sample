@@ -19,17 +19,44 @@ server {
 
     client_max_body_size 30m;
 
-    # Deny direct access to application-sensitive folders.
-    location ~ ^/(app|database|vendor|cache|logs|backups|cultures)/ {
+    # The panel ships unminified JS/CSS by design (no build step), so text
+    # compression is the biggest transfer win: gzip cuts the SPA payload by
+    # roughly 70-75%. gzip_static can serve precompressed .gz copies if the
+    # operator generates them (see docs/Features.md, "no build step").
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+
+    # Deny direct access to application-sensitive folders. These live outside the
+    # web root on a correct deployment, but the rule keeps a mis-pointed root safe.
+    location ~ ^/(app|database|vendor|cache|logs|backups|cultures|tests)/ {
         deny all;
         return 404;
     }
 
-    # Serve static assets directly.
-    location /assets/ {
+    # Entry points that must never be requested directly.
+    location ~ ^/(router|cron)\.php$ {
+        deny all;
+        return 404;
+    }
+
+    # Serve the SPA's static assets directly (fonts, vendored Quill, CSS, JS).
+    # These are the only files read from disk by the web server; uploads live
+    # outside the web root and are streamed through GET /media/{id}.
+    location /views/assets/ {
         try_files $uri =404;
+        access_log off;
         expires 30d;
         add_header Cache-Control "public, immutable";
+    }
+
+    # Font files must be served with the right type and CORS-free same-origin.
+    location ~ ^/views/assets/fonts/.*\.woff2$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, immutable";
+        add_header Access-Control-Allow-Origin "*";
     }
 
     location / {

@@ -166,6 +166,10 @@ Language switcher visible in the topbar (small globe icon). Default is per user 
 
 **Club sees:** Dashboard, My Club, Affiliated Riders, Competitions, Bans, Reports, Notifications, Messages, Profile.
 
+**Grouping.** The entries are grouped by section (عملیات, تحلیل, مالی, …). Each group
+header is a toggle: clicking folds or unfolds that group, the chevron rotates, and the
+state is remembered per browser.
+
 ### 5.3 Topbar
 
 - **Left:** Logo + breadcrumb.
@@ -356,17 +360,36 @@ When a session expires (90 days or manual revoke), the next request redirects to
 
 **Filters:** Owner (autocomplete), Status (active / sold / soft-deleted), Gender, Race, Color, Microchip (search).
 
-**Table columns:** Name, Microchip, Owner, Gender, Race, Color, Status, Created at, Actions.
+**Table columns:** Select (staff), Name, Gender, Race, Color, Microchip, Owner, Status, Actions.
 
 **Bulk actions:** Export CSV, Import CSV, Soft delete, Restore.
+
+Ordering and paging are server-side, as on every other grid. In print, the Select and
+Actions columns are omitted.
 
 **Header actions:** Add Horse, Import CSV, Export Template.
 
 ### 7.7 Horse detail
 
-**Tabs:** Profile, Images, Signup history, Shares, Transfers, Performance, Reports.
+**URL:** `/panel/horses/{id}`
 
-**Header actions:** Edit, Print, Soft delete / Restore, Sold to non-rider, Initiate transfer, Share to rider.
+A single scrolling page. Sections: profile details, **Gallery**, competition history,
+health & vaccination records, shares, transfers, share code.
+
+- **Owner** is a link to that user's page.
+- **Competition history** rows link to the competition page.
+- **Gallery** holds up to `horses.max_images` (5) images. Responsive tiles; the first is
+  badged "تصویر اصلی" (cover) and tiles are numbered. Clicking opens a full-screen
+  lightbox (Esc / ← / →, backdrop click). At the cap the "add image" tile disappears and
+  the footer reads "n از ۵ تصویر". Each tile has a delete button behind a confirmation.
+  Multi-select uploads sequentially.
+- **Health records** are addable/editable/removable by staff; riders see a read-only
+  history with overdue badges.
+
+**Header actions:** Edit, Print, Share to rider, Initiate transfer, Sold to non-rider, Back.
+
+**Share code:** a secret. It is rendered blurred behind a reveal + copy control, is
+never printed, and is redacted from every CSV export.
 
 ### 7.8 Rades
 
@@ -412,13 +435,34 @@ When a session expires (90 days or manual revoke), the next request redirects to
 
 ### 7.13 Competition detail
 
-**Tabs:** Profile, Rades, Signups, Results, Payment orders, Reports, Print preview.
+**URL:** `/panel/competitions/{id}`
 
-**Header actions:** Edit, Pause registration / Resume registration, Cancel, Clone (opens prefilled create page), Print, Signup sheet print.
+A single scrolling page, not a tabbed layout. Order matters: the short, structural
+information is read first, and the long entries table comes last.
+
+1. **Header actions:** Edit, Print, Pause registration / Resume registration, Cancel, Clone (opens prefilled create page), Results.
+2. **Wide banner** (optional, staff can upload / replace / remove).
+3. **Rades of this competition** — table with capacity, signup count and auto-confirm/barrage flags; staff can add, edit or remove a rade.
+4. **Description** and **Rules** (rich content).
+5. **Information** and **Change status** panels.
+6. **Registrations of this competition** — see below.
+
+**Registrations section (staff only):** signups are shown **grouped by Rade**, one
+collapsible block per rade in its configured order, each header carrying the rade name,
+its signup count and the remaining places ("۳۰ ظرفیت — ۱۲ جای باقی‌مانده" or "ظرفیت
+نامحدود"). Rows whose rade is not bound to this competition are collected under
+"سایر رده‌ها" so nothing disappears. Approve / Reject / Set position act on a single row
+and refresh both the section and the per-rade counts.
+
+A toggle switches the section to a **single flat, sortable list** for bulk work. A
+status filter, a free-text search and the view choice are URL state
+(`?su_view=&su_status=&su_q=`), so a filtered view can be shared and survives a reload.
+
+A secondary "صفحه کامل ثبت‌نام‌ها" link still points at the global grid.
 
 ### 7.14 Rades tab (per competition)
 
-**Table columns:** Rade name, Payment, Price (IRT), Capacity, Auto-confirm, Barrage, Signup mode, Sort, Actions.
+**Table columns:** Rade name, Payment, Price (IRT), Capacity, Signup count, Auto-confirm, Barrage, Signup mode, Sort, Actions.
 
 **Header action:** Add Rade (opens a modal to select Rade + Payment + capacity + flags).
 
@@ -426,11 +470,13 @@ When a session expires (90 days or manual revoke), the next request redirects to
 
 **URL:** `/panel/signups`
 
-**Filters:** Competition, Rade, Rider, Horse, Club, Status, Payment status, Date range.
+**Filters:** Search (rider, horse or club), Competition, Rade, Status.
 
-**Table columns:** Rider, Horse, Competition, Rade, Club, Payment amount, Status, Confirmed, Position, Winner, Created at, Actions.
+**Table columns:** Select, Rider, Horse, Competition, Rade, Payment amount, Position, Status, Actions.
 
-**Bulk actions:** Confirm, Reject, Export CSV.
+**Ordering and paging:** every sortable header issues a **server-side** `sort`/`dir`
+request, and the grid is paginated. Changing a filter or a sort resets to page 1.
+Selecting rows reveals the bulk bar (Confirm, Reject).
 
 ### 7.16 Payment orders
 
@@ -626,19 +672,24 @@ Rider **cannot**:
 **URL:** `/panel/rider/competitions/{id}`
 
 **Sections:**
-- Competition info
-- Rades list with prices
-- Sign up button per Rade (if registration open and rider verified)
+- Wide banner and competition title
+- Rades list with prices and remaining capacity (selectable)
+- Competition info, announcement and description
+- Select Horse (own + shared-to-me), affiliation Club and "Pay and register"
 
 ### 9.6 Signup flow (rider)
 
-1. Click "Sign up" on a Rade.
-2. Modal opens:
-   - Select Horse (own + shared-to-me)
-   - Select affiliation Club
-   - Confirm price (read-only)
-3. Click "Pay and register" → redirected to ZarinPal.
-4. Return via callback.
+1. Open a competition and pick a Rade from the list on the left.
+   The chosen card is highlighted, and the panel on the right names the rade and its
+   price; until a rade is chosen the "Pay and register" button is disabled and the
+   reason is stated next to it ("یک رده را انتخاب کنید تا بتوانید به پرداخت بروید.").
+2. Select Horse (own + shared-to-me).
+3. Select affiliation Club.
+4. Click "Pay and register" → redirected to ZarinPal.
+5. Return via callback.
+
+Missing horse or club is caught before the payment request with a specific message,
+never a silent failure.
 
 If rider is pending → show message: "برای ثبت‌نام، حساب شما باید توسط مدیر تایید شود."
 
@@ -807,6 +858,27 @@ Every list has a friendly empty state with icon, message, and primary action.
 
 Skeleton screens for lists and cards; spinner for buttons.
 
+### 11.11 Public competition page (`/c/{slug}`)
+
+The only unauthenticated screen. It is the link a competition is shared with on
+messengers, so it is a landing page rather than a form.
+
+- **Hero** — the competition's wide banner (or a branded gradient), with a status pill,
+  title, venue · city, a live countdown to the registration deadline or the start time,
+  and the call to action. "Copy link" and "Share" are in the hero.
+- **Summary strip** — rade count, open rades, remaining places, registrations.
+- **Body** — announcement callout, description, rades table (fee, capacity bar, open /
+  full), rules.
+- **Sidebar** — facts (date, registration window, venue, city), the same countdown, and
+  a second call to action. Sticky on desktop.
+- **Sticky mobile CTA** — below 720px the register button sticks to the bottom of the
+  viewport, since it is what the visitor came for.
+- **Self-contained** — server-rendered HTML plus a small inline script for the countdown
+  and share buttons. No panel JavaScript, so the page still reads correctly when pasted
+  or opened without scripts. Vazirmatn is self-hosted, so the typography is the same
+  offline.
+- **SEO** — title/description, Open Graph tags, and `og:image` pointing at the banner.
+
 ---
 
 ## 12. Reports & Grid UX
@@ -837,9 +909,10 @@ Skeleton screens for lists and cards; spinner for buttons.
 
 ### 12.4 Export
 
-- XLSX and CSV.
+- CSV (UTF-8 with BOM, so Excel/WPS/Sheets open it with Persian text intact).
 - Exports current filter state, all pages.
 - Signed URL returned; download starts.
+- Share codes are never written into an export.
 
 ### 12.5 Share
 
@@ -852,6 +925,22 @@ Skeleton screens for lists and cards; spinner for buttons.
 ### 12.6 Print
 
 - Print button on report page renders A4 print view with current filters.
+- See §13.5 for what is suppressed on paper (share codes, checkbox and action columns).
+
+### 12.7 Grid conventions (applies to every collection screen)
+
+- **Ordering and paging are server-side.** Every sortable header issues a `sort` + `dir`
+  request; the pager issues `page` + `per_page`. Sorting resets to page 1. A client-side
+  reorder of the loaded page is never used, because it silently reorders one page of a
+  large grid while the pager still claims to be showing the first N.
+- **Filters are URL state** — search, selects, chips, sort, dir and page all live in the
+  query string, so a filtered view can be shared, bookmarked and survives a reload.
+- **Filter selects are searchable.** Pickers backed by a list endpoint search as you
+  type and map rows to `{value, label}`; a bare field name and a formatter function are
+  both accepted.
+- **Row navigation** where the row has a destination: rider, horse and competition cells
+  are real links, and clicking elsewhere on the row opens the record.
+- **Print** drops the selection and action columns (§13.5).
 
 ---
 
@@ -886,6 +975,15 @@ Skeleton screens for lists and cards; spinner for buttons.
 ### 13.4 QR codes
 
 - QR encodes the current URL + query state.
+
+### 13.5 What never prints
+
+- **Sidebar, topbar, filter bars, pagers, buttons and pickers** — removed.
+- **Share codes** (horse and rider) — masked on screen, never printed, and redacted
+  from every CSV export.
+- **Selection checkboxes and per-row action columns** — any grid column can opt out with
+  `noPrint:true`, which emits `data-no-print` and is hidden by `@media print`. Grids with
+  a bulk toolbar use it so a printed sheet is data only.
 - Scanned by an authed panel user → opens the same view.
 - Not usable by unauthenticated visitors.
 - QR appears on printed competition papers, signup sheets, report pages, and entity headers.
@@ -985,7 +1083,48 @@ Available bulk actions per entity:
 
 ### 16.3 Field types
 
-- Text, textarea, number, date (Shamsi picker), select, multi-select, checkbox, radio, file upload, tag input, autocomplete.
+- Text, textarea, number, date (Shamsi picker), select, multi-select, checkbox, radio, file upload, tag input, autocomplete, **rich content**.
+
+### 16.3a Rich content field
+
+Used for the competition description, rules and announcement. The audience is
+non-technical staff, so the field is a full editor rather than a plain textarea.
+
+**Toolbar** (every control has a Persian tooltip):
+
+| Group | Controls |
+|---|---|
+| History | Undo, Redo |
+| Style | Paragraph / Heading / Sub-heading / Small heading |
+| Emphasis | Bold, Italic, Underline, Strikethrough, Subscript, Superscript, Inline code |
+| Blocks | Blockquote, Code block |
+| Lists | Bullet list, Numbered list, Indent, Outdent, Divider |
+| Insert | Link, Image, Clear formatting |
+| End | HTML source ("کد"), Formatting help ("راهنما") |
+
+**Images** can be dropped onto the field from the desktop, pasted from the clipboard, or
+chosen through the toolbar button. All three upload in the background and insert a
+placeholder when they finish; the field stays editable meanwhile. Uploads are restricted
+to images and to staff accounts.
+
+**Assistance.** The footer says images can be dragged in. The "راهنما" button opens a
+short modal explaining images, headings, nested lists, clearing formatting and the source
+view — the questions support actually gets asked.
+
+**Live word/character count** under the field.
+
+**HTML source view.** "کد" swaps the editor for a raw HTML textarea, so ready-made
+markup can be pasted or a mistake can be corrected by hand, then swaps back.
+
+**Constraints.** Only the whitelisted tags survive: headings, paragraphs, bold/italic/
+underline/strikethrough/subscript/superscript, inline code, code blocks, blockquote,
+bullet and numbered lists, links, images, dividers and tables. Styling such as font
+colour, size and alignment is deliberately not offered — it would be stripped on save and
+would make the public page inconsistent. Everything is stored and rendered identically in
+the panel and on the public page.
+
+**Fallback.** If the editor cannot load, the field degrades to a plain formatting
+toolbar over a `contenteditable` region rather than becoming unusable.
 
 ### 16.4 Shamsi date picker
 
@@ -1006,6 +1145,8 @@ Available bulk actions per entity:
 - Progress bar.
 - Thumbnail preview for images.
 - Remove button.
+- Horse galleries hold at most 5 images; once at the cap the add control is replaced by
+  a counter.
 
 ### 16.7 Autosave
 

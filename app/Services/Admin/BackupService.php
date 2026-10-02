@@ -33,6 +33,8 @@ final class BackupService
     private \App\Services\CacheService $cache;
     private \App\Services\LogService $log;
     private string $backupsDir;
+    /** @var bool Whether this process already holds the backup lock. */
+    private bool $lockHeld = false;
 
     /**
      * @param Database                       $db         Main DB.
@@ -94,6 +96,23 @@ final class BackupService
      */
     public function create(string $suffix, int $actorId): array
     {
+        // Serialise backup work: the cron job and a manual backup must never
+        // zip the same files at once, and a restore must not race either.
+        return $this->withLock(fn (): array => $this->createLocked($suffix, $actorId));
+    }
+
+    /**
+     * Create a backup zip while the backup lock is held.
+     *
+     * @param string $suffix  Optional filename suffix.
+     * @param int    $actorId Acting admin id.
+     * @return array{name:string,size:int}
+     * @throws ServerErrorException BACKUP_FAILED.
+     *
+     * Side effects: writes DB snapshots + a zip file in backups/; prunes old backups; audit.
+     */
+    private function createLocked(string $suffix, int $actorId): array
+    {
         if (!is_dir($this->backupsDir)) {
             @mkdir($this->backupsDir, 0775, true);
         }
@@ -109,9 +128,10 @@ final class BackupService
         $logsCopy = $tmpDir . '/logs.sqlite';
 
         try {
-            // Consistent DB copies via VACUUM INTO.
-            $this->db->pdo()->exec('VACUUM INTO ' . $this->db->pdo()->quote($appCopy));
-            $this->logsDb->pdo()->exec('VACUUM INTO ' . $this->logsDb->pdo()->quote($logsCopy));
+            // Consistent DB copies via VACUUM INTO (exec() discards cached
+            // prepared statements, which SQLite refuses to VACUUM past).
+            $this->db->exec('VACUUM INTO ' . $this->db->pdo()->quote($appCopy));
+            $this->logsDb->exec('VACUUM INTO ' . $this->logsDb->pdo()->quote($logsCopy));
 
             $zip = new ZipArchive();
             if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -149,6 +169,22 @@ final class BackupService
      */
     public function restore(string $name, int $actorId, string $currentSessionId = ''): void
     {
+        $this->withLock(function () use ($name, $actorId, $currentSessionId): void {
+            $this->restoreLocked($name, $actorId, $currentSessionId);
+        });
+    }
+
+    /**
+     * Restore a backup while the backup lock is held.
+     *
+     * @param string $name             Backup filename.
+     * @param int    $actorId          Acting admin id.
+     * @param string $currentSessionId Current admin's session id to keep.
+     * @return void
+     * @throws ServerErrorException RESTORE_FAILED.
+     */
+    private function restoreLocked(string $name, int $actorId, string $currentSessionId): void
+    {
         $zipPath = $this->path($name);
         if (!is_file($zipPath)) {
             throw new ServerErrorException('RESTORE_FAILED', 'Backup not found', 500);
@@ -176,10 +212,19 @@ final class BackupService
             if (!is_file($tmpDir . '/app.sqlite')) {
                 throw new ServerErrorException('RESTORE_FAILED', 'Archive missing app.sqlite', 500);
             }
+            $dbFile = $this->db->file();
+            $logFile = $this->logsDb->file();
             $this->closeConnections();
-            @copy($tmpDir . '/app.sqlite', $this->db->file());
+            /* Drop the WAL/SHM sidecars of the databases being replaced: a
+               stale write-ahead log replayed over a freshly copied file is a
+               corruption path. SQLite recreates them on the next open. */
+            foreach ([$dbFile, $logFile] as $target) {
+                @unlink($target . '-wal');
+                @unlink($target . '-shm');
+            }
+            @copy($tmpDir . '/app.sqlite', $dbFile);
             if (is_file($tmpDir . '/logs.sqlite')) {
-                @copy($tmpDir . '/logs.sqlite', $this->logsDb->file());
+                @copy($tmpDir . '/logs.sqlite', $logFile);
             }
             if (is_dir($tmpDir . '/uploads')) {
                 $this->rrmdir(BASE_PATH . '/uploads');
@@ -268,6 +313,13 @@ final class BackupService
         });
         $this->rrmdir(BASE_PATH . '/uploads');
         @mkdir(BASE_PATH . '/uploads', 0775, true);
+        /* Reclaim the space freed by the DELETEs; without a VACUUM the file
+           keeps every page and grows forever. */
+        try {
+            $this->db->exec('VACUUM');
+        } catch (\Throwable) {
+            // A failed VACUUM must not fail the reset (data is already gone).
+        }
         $this->cache->clearAll();
         $this->log->audit(['actor_id' => $adminId, 'actor_role' => 'admin', 'action' => 'system.reset', 'target_type' => 'system', 'target_id' => 0]);
     }
@@ -309,14 +361,47 @@ final class BackupService
     }
 
     /**
+     * Run a callable while holding an exclusive backup lock.
+     *
+     * SQLite backup/restore rewrite database files; two concurrent runs (a
+     * manual backup plus the cron job, or a restore racing a backup) could zip
+     * or replace a half-written file. Reentrant within one process so
+     * restore() can call create() for its pre-restore snapshot.
+     *
+     * @param callable $fn Work to run.
+     * @return mixed Callback result.
+     * @throws ServerErrorException When the lock cannot be acquired.
+     */
+    private function withLock(callable $fn): mixed
+    {
+        if ($this->lockHeld) { return $fn(); }
+        if (!is_dir($this->backupsDir)) { @mkdir($this->backupsDir, 0775, true); }
+        $handle = @fopen($this->backupsDir . '/.backup.lock', 'c');
+        if ($handle === false || !flock($handle, LOCK_EX)) {
+            if ($handle !== false) { fclose($handle); }
+            throw new ServerErrorException('BACKUP_FAILED', 'Backup storage is busy', 500);
+        }
+        $this->lockHeld = true;
+        try {
+            return $fn();
+        } finally {
+            $this->lockHeld = false;
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
+    /**
      * Close PDO connections so files can be replaced.
      *
      * @return void
      */
     private function closeConnections(): void
     {
-        // PDO handles are dropped by unsetting container singletons is not possible
-        // here; SQLite allows file replacement while a handle exists on Unix.
+        // Actually drop the handles: SQLite may keep WAL/SHM state tied to
+        // them, and restore() must not copy over a file with an open writer.
+        $this->db->close();
+        $this->logsDb->close();
     }
 
     /**

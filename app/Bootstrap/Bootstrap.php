@@ -107,7 +107,7 @@ final class Bootstrap
 
         // Settings + Culture.
         $c->singleton('settings', static fn(Container $c): SettingService => new SettingService($c->get('db'), $c->get('cache')));
-        $c->singleton('culture', static fn(Container $c): CultureService => new CultureService($c->get('db'), $c->get('cache'), 'fa-IR'));
+        $c->singleton('culture', static fn(Container $c): CultureService => new CultureService($c->get('db'), $c->get('cache'), 'fa-IR', $c->get('settings')));
 
         // Logging.
         $c->singleton('log', static fn(Container $c): LogService => new LogService($c->get('logs_db'), (string) (getenv('GORGAN_LOGS_DIR') ?: BASE_PATH . '/logs'), $c->get('settings')));
@@ -131,7 +131,7 @@ final class Bootstrap
         $c->singleton('rades', static fn(Container $c): RadeService => new RadeService($c->get('db'), $c->get('log')));
         $c->singleton('lookups', static fn(Container $c): LookupService => new LookupService($c->get('db'), $c->get('log')));
         $c->singleton('payments', static fn(Container $c): PaymentService => new PaymentService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications'), $c->get('sms')));
-        $c->singleton('competitions', static fn(Container $c): CompetitionService => new CompetitionService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications')));
+        $c->singleton('competitions', static fn(Container $c): CompetitionService => new CompetitionService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications'), $c->get('media')));
         $c->singleton('bans', static fn(Container $c): BanService => new BanService($c->get('db'), $c->get('log'), $c->get('notifications'), $c->get('sms')));
         $c->singleton('signups', static fn(Container $c): SignupService => new SignupService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('payments'), $c->get('bans'), $c->get('clubs'), $c->get('notifications'), $c->get('sms')));
         $c->singleton('results', static fn(Container $c): ResultService => new ResultService($c->get('db'), $c->get('settings'), $c->get('log'), $c->get('notifications'), $c->get('sms')));

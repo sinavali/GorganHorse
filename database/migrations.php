@@ -64,6 +64,29 @@ $mainMigrations = [
         $db->execute('CREATE INDEX IF NOT EXISTS idx_horse_health_horse ON horse_health_records(horse_id)');
         $db->execute('CREATE INDEX IF NOT EXISTS idx_horse_health_due ON horse_health_records(next_due_at)');
     },
+    'competitions.banner_media_id' => static function ($db): void {
+        $cols = array_column($db->select('PRAGMA table_info(competitions)'), 'name');
+        if (!in_array('banner_media_id', $cols, true)) {
+            $db->execute('ALTER TABLE competitions ADD COLUMN banner_media_id INTEGER');
+            $db->execute('CREATE INDEX IF NOT EXISTS idx_competitions_banner ON competitions(banner_media_id)');
+        }
+    },
+    'performance indexes (signups, payment_orders)' => static function ($db): void {
+        // Index creation is idempotent by itself; this migration exists so
+        // existing installations pick the indexes up without a reinstall.
+        $indexes = [
+            'CREATE INDEX IF NOT EXISTS idx_signups_affiliation_club ON signups(affiliation_club_id)',
+            'CREATE INDEX IF NOT EXISTS idx_signups_created ON signups(created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_signups_status_created ON signups(status, created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_orders_verified ON payment_orders(verified_at)',
+            'CREATE INDEX IF NOT EXISTS idx_orders_status_verified ON payment_orders(status, verified_at)',
+        ];
+        foreach ($indexes as $sql) {
+            $db->execute($sql);
+        }
+        // Refresh the planner statistics so SQLite uses the new indexes at once.
+        $db->exec('ANALYZE');
+    },
     'competitions.announcement' => static function ($db): void {
         $cols = array_column($db->select('PRAGMA table_info(competitions)'), 'name');
         if (!in_array('announcement', $cols, true)) {

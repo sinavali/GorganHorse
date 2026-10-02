@@ -247,11 +247,34 @@ final class MediaService
     {
         $error = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($error !== UPLOAD_ERR_OK) {
-            throw new ValidationException('Upload failed (error ' . $error . ')', 'file', 'VALIDATION_FAILED');
+            throw new ValidationException(self::uploadErrorMessage($error), 'file', 'VALIDATION_FAILED');
         }
         if (!is_uploaded_file((string) ($file['tmp_name'] ?? '')) && !is_file((string) ($file['tmp_name'] ?? ''))) {
             throw new ValidationException('Uploaded file is missing', 'file', 'VALIDATION_FAILED');
         }
+    }
+
+    /**
+     * Persian message for a PHP upload error code.
+     *
+     * UPLOAD_ERR_INI_SIZE / UPLOAD_ERR_FORM_SIZE are server configuration
+     * limits, not user mistakes, and they say so explicitly (the installer
+     * wizard reports the same ini limits via InstallerService::requirements()).
+     *
+     * @param int $error PHP upload error code.
+     * @return string
+     */
+    private static function uploadErrorMessage(int $error): string
+    {
+        return match ($error) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'حجم فایل بیش از حد مجاز سرور است (محدودیت PHP).',
+            UPLOAD_ERR_PARTIAL => 'آپلود فایل کامل نشد؛ لطفاً دوباره تلاش کنید.',
+            UPLOAD_ERR_NO_FILE => 'فایلی انتخاب نشده است.',
+            UPLOAD_ERR_NO_TMP_DIR => 'پوشه موقت سرور در دسترس نیست.',
+            UPLOAD_ERR_CANT_WRITE => 'نوشتن فایل روی سرور ممکن نشد.',
+            UPLOAD_ERR_EXTENSION => 'آپلود توسط یکی از افزونه‌های سرور متوقف شد.',
+            default => 'آپلود فایل با خطا مواجه شد (کد ' . $error . ').',
+        };
     }
 
     /**

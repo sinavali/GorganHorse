@@ -37,19 +37,27 @@ final class CompetitionService
     private SettingService $settings;
     private LogService $log;
     private ?NotificationService $notifications;
+    private ?MediaService $media;
 
     /**
      * @param Database                 $db            Main DB.
      * @param SettingService           $settings      Settings.
      * @param LogService               $log           Logs.
      * @param NotificationService|null $notifications Notifications.
+     * @param MediaService|null        $media         Media (wide competition banner).
      */
-    public function __construct(Database $db, SettingService $settings, LogService $log, ?NotificationService $notifications = null)
-    {
+    public function __construct(
+        Database $db,
+        SettingService $settings,
+        LogService $log,
+        ?NotificationService $notifications = null,
+        ?MediaService $media = null
+    ) {
         $this->db = $db;
         $this->settings = $settings;
         $this->log = $log;
         $this->notifications = $notifications;
+        $this->media = $media;
     }
 
     /**
@@ -112,7 +120,93 @@ final class CompetitionService
             }
         }
         $competition['rades'] = $this->rades($id);
+        $competition['banner'] = $this->banner((int) $competition['id']);
         return $competition;
+    }
+
+    /**
+     * Banner metadata for a competition, or null when none is set.
+     *
+     * The image itself is never served from here: media files live outside the
+     * web root, and the competition banner is the one asset the unauthenticated
+     * page `/c/{slug}` needs, so it has its own read-only route.
+     *
+     * @param int $competitionId Competition id.
+     * @return array{id:int,uuid:string,width:?int,height:?int,size_bytes:int,original_name:string}|null
+     */
+    public function banner(int $competitionId): ?array
+    {
+        $row = $this->db->selectOne(
+            'SELECT m.id, m.uuid, m.width, m.height, m.size_bytes, m.original_name
+             FROM competitions c JOIN media m ON m.id = c.banner_media_id
+             WHERE c.id = :c',
+            ['c' => $competitionId]
+        );
+        if ($row === null) {
+            return null;
+        }
+        return [
+            'id' => (int) $row['id'],
+            'uuid' => (string) $row['uuid'],
+            'width' => $row['width'] === null ? null : (int) $row['width'],
+            'height' => $row['height'] === null ? null : (int) $row['height'],
+            'size_bytes' => (int) $row['size_bytes'],
+            'original_name' => (string) ($row['original_name'] ?? ''),
+        ];
+    }
+
+    /**
+     * Upload (or replace) the wide banner image of a competition.
+     *
+     * Replaces the previous banner: the old media row and file are removed so
+     * a competition can never accumulate orphaned uploads through re-saves.
+     *
+     * @param int   $id    Competition id.
+     * @param array $file  $_FILES entry.
+     * @param array $actor Actor.
+     * @return array{id:int,media_id:int}
+     * @throws NotFoundException|ForbiddenException|ValidationException
+     *
+     * Side effects: writes an upload, inserts/repoints media + competitions rows; audit.
+     */
+    public function setBanner(int $id, array $file, array $actor): array
+    {
+        if (!in_array($actor['role'], ['admin', 'manager'], true)) { throw new ForbiddenException('Forbidden', 'FORBIDDEN'); }
+        $competition = $this->db->selectOne('SELECT * FROM competitions WHERE id = :id', ['id' => $id]);
+        if ($competition === null) { throw new NotFoundException('Competition not found', 'COMPETITION_NOT_FOUND'); }
+        if ($this->media === null) { throw new ValidationException('Uploads are not available', 'file', 'VALIDATION_FAILED'); }
+        $previous = $competition['banner_media_id'] === null ? null : (int) $competition['banner_media_id'];
+        $stored = $this->media->store($file, 'competition', (int) ($actor['id'] ?? 0) ?: null, 'competitions/' . $id);
+        $this->db->update('competitions', ['banner_media_id' => $stored['id'], 'updated_at' => now_utc()], 'id = :id', ['id' => $id]);
+        if ($previous !== null && $previous !== (int) $stored['id']) {
+            $this->media->delete($previous);
+        }
+        $this->record($actor, 'competition.banner.set', $id, ['media_id' => $stored['id']]);
+        return ['id' => $id, 'media_id' => (int) $stored['id']];
+    }
+
+    /**
+     * Remove the banner image of a competition.
+     *
+     * @param int   $id    Competition id.
+     * @param array $actor Actor.
+     * @return array{id:int,banner:null}
+     * @throws NotFoundException|ForbiddenException
+     *
+     * Side effects: nulls competitions.banner_media_id and deletes the media row; audit.
+     */
+    public function clearBanner(int $id, array $actor): array
+    {
+        if (!in_array($actor['role'], ['admin', 'manager'], true)) { throw new ForbiddenException('Forbidden', 'FORBIDDEN'); }
+        $competition = $this->db->selectOne('SELECT * FROM competitions WHERE id = :id', ['id' => $id]);
+        if ($competition === null) { throw new NotFoundException('Competition not found', 'COMPETITION_NOT_FOUND'); }
+        $previous = $competition['banner_media_id'] === null ? null : (int) $competition['banner_media_id'];
+        $this->db->update('competitions', ['banner_media_id' => null, 'updated_at' => now_utc()], 'id = :id', ['id' => $id]);
+        if ($previous !== null) {
+            $this->media?->delete($previous);
+        }
+        $this->record($actor, 'competition.banner.clear', $id);
+        return ['id' => $id, 'banner' => null];
     }
 
     /**

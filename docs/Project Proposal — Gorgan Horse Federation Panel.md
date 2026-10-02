@@ -143,7 +143,7 @@ The panel is **fully in the federation's hands**: single codebase, single host, 
 
 - One unified reporting page with rich filters.
 - Column visibility and order saved per user.
-- Bulk export to XLSX and CSV.
+- Bulk export to CSV, readable in Excel, WPS and Google Sheets.
 - Signed download links valid for one hour.
 - Report sharing within the panel (Riders → Managers/Admins; Managers/Admins → anyone).
 
@@ -290,11 +290,13 @@ No other external services are required. The panel is fully self-hosted.
 
 To set clear expectations, the following are **not** part of this project:
 
-- Public site (landing pages, blog, SEO) — handled by WordPress on the main domain.
+- Public website (blog, general landing pages, SEO) — handled by WordPress on the main
+  domain. The one exception is the shareable competition page `GET /c/{slug}`, which the
+  panel renders itself because it must show live registration state, capacity and results.
 - WordPress API — developed separately if needed.
 - Email sending — not implemented; password reset is handled manually by Managers.
 - PWA — not implemented.
-- Dark mode — not implemented.
+- Theme picker beyond the built-in light/dark toggle — no per-user custom themes.
 - Multi-tenancy — not implemented.
 - Native mobile apps — not implemented.
 - Migration from the old WordPress data — starting fresh.

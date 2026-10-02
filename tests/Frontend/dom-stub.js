@@ -36,9 +36,11 @@ function makeNode(tag, attrs) {
     style: {},
     _listeners: {},
     _html: '',
-    appendChild: function (c) { n.children.push(c); return c; },
+    appendChild: function (c) { if (c && c.text === undefined) { c._parent = n; } n.children.push(c); return c; },
     insertAdjacentHTML: function (_pos, html) {
-      n.children = parse(html).children.concat(n.children);
+      var added = parse(html).children;
+      added.forEach(function (c) { if (c && c.text === undefined) { c._parent = n; } });
+      n.children = added.concat(n.children);
     },
     addEventListener: function (t, f) { (n._listeners[t] = n._listeners[t] || []).push(f); },
     removeEventListener: function () {},
@@ -87,7 +89,13 @@ function makeNode(tag, attrs) {
 
   Object.defineProperty(n, 'innerHTML', {
     get: function () { return n._html; },
-    set: function (v) { n.children = parse(String(v)).children; n._html = String(v); }
+    set: function (v) {
+      n.children = parse(String(v)).children;
+      /* parse() roots the fragment at a throwaway div; re-parent so descendant
+         selectors like `#tbl [data-page]` still resolve against this node. */
+      n.children.forEach(function (c) { if (c && c.text === undefined) { c._parent = n; } });
+      n._html = String(v);
+    }
   });
 
   Object.defineProperty(n, 'textContent', {
@@ -123,7 +131,13 @@ function makeNode(tag, attrs) {
     if (k.indexOf('data-') === 0) { n.dataset[dataKey(k.slice(5))] = n.attrs[k]; }
   });
   n.hidden = 'hidden' in n.attrs;
-  n.checked = 'checked' in n.attrs;
+  /* `checked` mirrors the attribute both ways, like a real checkbox. As a
+     static value it was frozen at construction, so setting the attribute
+     later (what a radio click does) was invisible to `rade()`. */
+  Object.defineProperty(n, 'checked', {
+    get: function () { return 'checked' in n.attrs; },
+    set: function (v) { if (v) { n.attrs.checked = ''; } else { delete n.attrs.checked; } }
+  });
   return n;
 }
 
@@ -148,6 +162,7 @@ function parse(html) {
     var ar = /([a-zA-Z0-9_-]+)(?:="([^"]*)")?/g, a;
     while ((a = ar.exec(attrStr))) { attrs[a[1]] = a[2] === undefined ? '' : a[2]; }
     var node = makeNode(tag, attrs);
+    node._parent = stack[stack.length - 1];
     stack[stack.length - 1].children.push(node);
     if (!selfClose && !VOID[tag.toLowerCase()]) { stack.push(node); }
   }
@@ -156,46 +171,85 @@ function parse(html) {
   return root;
 }
 
-/** Match one node against one simple selector part. */
+/**
+ * Match one node against one simple selector part.
+ *
+ * Supports a tag, any number of `.class` and `#id`, and any number of
+ * `[attr]` / `[attr=value]` (value quoted or bare) conditions, in any
+ * combination — `button.edt-b[data-format="script"][data-value="sub"]` is
+ * what the Quill toolbar is queried with.
+ */
 function matchPart(node, part) {
   if (node.text !== undefined) { return false; }
-  if (part.charAt(0) === '.') {
-    return (node.attrs.class || '').split(/\s+/).indexOf(part.slice(1)) > -1;
+  var m = part.match(/^([a-zA-Z][a-zA-Z0-9]*)?((?:[.#][\w-]+|\[[^\]]+\])*)$/);
+  if (!m) { return node.tag === part.toLowerCase(); }
+  if (m[1] && node.tag !== m[1].toLowerCase()) { return false; }
+  var rest = m[2] || '';
+  var tre = /([.#])([\w-]+)|\[([^\]]+)\]/g, x;
+  while ((x = tre.exec(rest))) {
+    if (x[1] === '.') {
+      if ((node.attrs.class || '').split(/\s+/).indexOf(x[2]) === -1) { return false; }
+    } else if (x[1] === '#') {
+      if (node.attrs.id !== x[2]) { return false; }
+    } else {
+      var am = x[3].match(/^([a-zA-Z-]+)(?:="?([^"\]]*)"?)?$/);
+      if (!am) { return false; }
+      if (!(am[1] in node.attrs)) { return false; }
+      if (am[2] !== undefined && String(node.attrs[am[1]]) !== am[2]) { return false; }
+    }
   }
-  if (part.charAt(0) === '#') { return node.attrs.id === part.slice(1); }
-  /* A compound part such as `input[type=hidden]` (what initPicks() queries)
-     combines a tag test with an attribute test. The attribute value may be
-     quoted or bare, so both `[a="b"]` and `[a=b]` must match. */
-  var compound = part.match(/^([a-zA-Z][a-zA-Z0-9]*)?\[([a-zA-Z-]+)(?:="?([^"\]]*)"?)?\]$/);
-  if (compound) {
-    if (compound[1] && node.tag !== compound[1].toLowerCase()) { return false; }
-    if (!(compound[2] in node.attrs)) { return false; }
-    if (compound[3] !== undefined && String(node.attrs[compound[2]]) !== compound[3]) { return false; }
-    return true;
-  }
-  return node.tag === part.toLowerCase();
+  return true;
 }
 
-/** Collect descendants matching a (possibly descendant-chained) selector. */
+/** Parent link, maintained lazily by walking up from a node's owner. */
+function ancestors(node) {
+  var out = [];
+  var owner = node && node._parent;
+  while (owner) { out.push(owner); owner = owner._parent; }
+  return out;
+}
+
+/**
+ * Collect descendants matching a (possibly descendant-chained) selector.
+ *
+ * `a b c` matches any `c` that has a `b` ancestor which in turn has an `a`
+ * ancestor — at any depth, not just the first child. The earlier version only
+ * stepped into the first child of the previous match, so real selectors like
+ * `#tbl [data-page]` silently matched nothing and the pager under test never
+ * had its click handler bound.
+ */
 function findAll(root, sel) {
-  var parts = String(sel).trim().split(/\s+/);
+  /* Selector lists: `input[name],select[name],textarea[name]` is what
+     UI.formValues() queries. Without this it matched nothing and every form
+     silently produced {} — which hid the rider-signup bug entirely. */
+  var groups = String(sel).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (groups.length > 1) {
+    var all = [];
+    groups.forEach(function (g) {
+      findAll(root, g).forEach(function (n) { if (all.indexOf(n) === -1) { all.push(n); } });
+    });
+    return all;
+  }
+  var parts = String(sel).trim().split(/\s+/).filter(Boolean);
   var out = [];
   (function walk(n) {
     (n.children || []).forEach(function (c) {
       if (c.text === undefined) {
-        var node = c, i = 0, ok = true;
-        while (i < parts.length) {
-          if (!matchPart(node, parts[i])) { ok = false; break; }
-          i++;
-          if (i < parts.length) {
-            var next = (node.children || []).filter(function (cc) { return cc.text === undefined; })[0];
-            if (!next) { ok = false; break; }
-            node = next;
+        var last = parts[parts.length - 1];
+        if (matchPart(c, last)) {
+          var chain = ancestors(c);
+          var ok = true;
+          for (var i = parts.length - 2; i >= 0; i--) {
+            var found = false;
+            for (var j = 0; j < chain.length; j++) {
+              if (matchPart(chain[j], parts[i])) { found = true; break; }
+            }
+            if (!found) { ok = false; break; }
           }
+          if (ok) { out.push(c); }
         }
-        if (ok) { out.push(c); }
+        walk(c);
       }
-      walk(c);
     });
   })(root);
   return out;

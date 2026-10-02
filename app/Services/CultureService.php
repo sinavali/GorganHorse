@@ -37,20 +37,26 @@ final class CultureService
     private Database $db;
     private CacheService $cache;
     private string $default;
+    private ?SettingService $settings;
     /** @var array<string,mixed> Active culture definition. */
     private array $active;
     private string $activeCode;
 
     /**
-     * @param Database     $db      Main database.
-     * @param CacheService $cache   Cache service.
-     * @param string       $default Default culture code.
+     * @param Database            $db       Main database.
+     * @param CacheService        $cache    Cache service.
+     * @param string              $default  Default culture code.
+     * @param SettingService|null $settings Settings store (so the configured
+     *                                      default culture is read through the
+     *                                      memoised settings cache instead of a
+     *                                      raw query on every request).
      */
-    public function __construct(Database $db, CacheService $cache, string $default = 'fa-IR')
+    public function __construct(Database $db, CacheService $cache, string $default = 'fa-IR', ?SettingService $settings = null)
     {
         $this->db = $db;
         $this->cache = $cache;
         $this->default = $default;
+        $this->settings = $settings;
         $this->activeCode = $default;
         $this->active = $this->load($default);
     }
@@ -130,6 +136,10 @@ final class CultureService
     private function configuredDefault(): ?string
     {
         try {
+            if ($this->settings !== null) {
+                $value = $this->settings->get('app.default_culture', '');
+                return is_string($value) && $value !== '' ? trim($value) : null;
+            }
             $value = $this->db->scalar("SELECT value FROM settings WHERE key = 'app.default_culture'");
             $code = is_string($value) && $value !== '' ? trim($value) : null;
             return $code;
@@ -153,24 +163,30 @@ final class CultureService
         if (!$this->exists($code)) {
             throw new \InvalidArgumentException('Unknown culture: ' . $code);
         }
-        $now = now_utc();
-        $updated = $this->db->execute(
-            "UPDATE settings SET value = :v, updated_at = :u WHERE key = 'app.default_culture'",
-            ['v' => $code, 'u' => $now]
-        );
-        if ($updated === 0) {
-            $this->db->insert('settings', [
-                'key' => 'app.default_culture',
-                'value' => $code,
-                'type' => 'string',
-                'grp' => 'general',
-                'updated_at' => $now,
-            ]);
-        }
-        /* Drop the settings cache entry so the next read comes from the DB. */
-        try {
-            $this->cache->forget('settings', 'app.default_culture');
-        } catch (\Throwable) {
+        if ($this->settings !== null) {
+            // Preferred path: SettingService owns the write and invalidates the
+            // settings memo + file cache, so the new default takes effect for
+            // every later read in this process.
+            $this->settings->set('app.default_culture', $code);
+        } else {
+            $now = now_utc();
+            $updated = $this->db->execute(
+                "UPDATE settings SET value = :v, updated_at = :u WHERE key = 'app.default_culture'",
+                ['v' => $code, 'u' => $now]
+            );
+            if ($updated === 0) {
+                $this->db->insert('settings', [
+                    'key' => 'app.default_culture',
+                    'value' => $code,
+                    'type' => 'string',
+                    'grp' => 'general',
+                    'updated_at' => $now,
+                ]);
+            }
+            try {
+                $this->cache->clearNamespace('settings');
+            } catch (\Throwable) {
+            }
         }
         $this->setActive($code);
     }

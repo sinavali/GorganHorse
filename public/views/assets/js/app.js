@@ -153,8 +153,7 @@ function drawNav(){
   function flush(){
     if(!current){return;}
     var open=collapsed.indexOf(current)<0;
-    html+='<button class="nsec" data-sec="'+UI.esc(current)+'" aria-expanded="'+open+'"'
-      +(open?'':' aria-expanded="false"')+'>'
+    html+='<button class="nsec" data-sec="'+UI.esc(current)+'" aria-expanded="'+(open?'true':'false')+'">'
       +'<span>'+UI.esc(current)+'</span>'+UI.ic('i-cr')+'</button>'
       +'<div class="nsec-items"'+(open?'':' hidden')+'>'+buf.join('')+'</div>';
     buf=[];
@@ -183,9 +182,13 @@ function drawNav(){
     b.addEventListener('click',function(){
       var itemsBox=b.nextElementSibling;
       if(!itemsBox){return;}
-      var open=itemsBox.hasAttribute('hidden');
-      if(open){itemsBox.removeAttribute('hidden');}else{itemsBox.setAttribute('hidden','');}
+      /* State lives on aria-expanded only: .nsec-items carries a `display`
+         declaration, which overrides the UA [hidden] rule, so toggling the
+         attribute alone was invisible. Both are written so the visual and the
+         DOM always agree. */
+      var open=b.getAttribute('aria-expanded')!=='true';
       b.setAttribute('aria-expanded',open?'true':'false');
+      if(open){itemsBox.removeAttribute('hidden');}else{itemsBox.setAttribute('hidden','');}
       toggleSection(b.dataset.sec,!open);
     });
   });
@@ -687,12 +690,15 @@ App.enter=function(){
    authenticated request has to bounce the browser back to the installer
    instead of leaving a dead shell on screen. */
 function watchInstallState(){
+  /* The install flag only flips when an admin wipes the database, which is
+     rare: poll every 5 minutes instead of every 60 s, and skip hidden tabs so
+     a background tab does not keep requesting /panel/requirements. */
   setInterval(function(){
-    if(!App.user){return;}
+    if(!App.user||document.visibilityState==='hidden'){return;}
     API.get('/panel/requirements').then(function(info){
       if(info&&info.installed===false){location.href='/install';}
     }).catch(function(){});
-  },60000);
+  },300000);
 }
 
 function loadSession(){

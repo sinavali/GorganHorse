@@ -29,6 +29,38 @@ use App\Http\MiddlewareContext;
 final class MediaController extends BaseController
 {
     /**
+     /**
+     * Upload an image used inside a rich-text field.
+     *
+     * Route:   POST /panel/media
+     * Auth:    role:admin,manager
+     * Body:    multipart/form-data with `file`
+     * Returns: JSON envelope { data: { id, url } }
+     *
+     * Purpose: the content editor lets staff drag an image straight onto the
+     * page. There is no per-entity endpoint that fits a description body, so
+     * this stores the file and hands back the authenticated URL the editor
+     * embeds. Images referenced from content are served through the same
+     * authenticated `GET /media/{id}` route as every other upload.
+     */
+    public function store(Request $request, MiddlewareContext $ctx): Response
+    {
+        $file = $request->files('file');
+        if (!is_array($file)) { return $this->fail('VALIDATION_FAILED', 'No file uploaded', $ctx, 422, 'file'); }
+        $stored = $this->c->get('media')->store($file, 'editor', (int) $ctx->actor()['id'], 'editor');
+        if (!str_starts_with((string) $stored['mime'], 'image/')) {
+            $this->c->get('media')->delete((int) $stored['id']);
+            return $this->fail('VALIDATION_FAILED', 'Only images can be embedded in rich text', $ctx, 422, 'file');
+        }
+        return $this->ok([
+            'id' => (int) $stored['id'],
+            'url' => '/media/' . (int) $stored['id'],
+            'width' => $stored['width'],
+            'height' => $stored['height'],
+        ], $ctx, 201);
+    }
+
+    /**
      * Stream a media file by id.
      *
      * Route:   GET /media/{id}
@@ -52,15 +84,25 @@ final class MediaController extends BaseController
 
         $mime = (string) ($media['mime'] ?? 'application/octet-stream');
         $name = (string) ($media['original_name'] ?? basename($real));
-        $response = new Response(
-            (string) file_get_contents($real),
-            200,
-            [
-                'Content-Type' => $mime,
-                'Content-Disposition' => 'inline; filename="' . str_replace('"', '', $name) . '"',
-                'Cache-Control' => 'private, max-age=86400',
-            ]
-        );
+        $etag = '"' . substr(sha1((string) ($media['uuid'] ?? $real) . ':' . (string) filesize($real)), 0, 32) . '"';
+        $headers = [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . str_replace('"', '', $name) . '"',
+            'Cache-Control' => 'private, max-age=86400',
+            'ETag' => $etag,
+        ];
+        // Conditional request: a browser that already has the bytes sends the
+        // ETag back and gets a cheap 304 instead of a second download.
+        if (trim((string) $request->header('if-none-match')) === $etag) {
+            return new Response('', 304, $headers);
+        }
+        /* Response::download streams the file with readfile() and a
+           Content-Length header, so the whole file (up to 25 MB) is never
+           buffered in memory the way file_get_contents() did. */
+        $response = Response::download($real, $name);
+        foreach ($headers as $header => $value) {
+            $response = $response->withHeader($header, $value);
+        }
         return $response;
     }
 }

@@ -392,6 +392,7 @@ CREATE TABLE IF NOT EXISTS competitions (
     registration_paused   INTEGER NOT NULL DEFAULT 0,       -- 1 = registration paused
     announcement          TEXT,                             -- mandatory announcement shown before signup
     announcement_required INTEGER NOT NULL DEFAULT 0,       -- 1 = rider must tick "read" before signup
+    banner_media_id       INTEGER,                          -- FK media.id (wide hero/banner image)
     status                TEXT NOT NULL DEFAULT 'draft',    -- draft|open|closed|running|finished|cancelled
     results_status        TEXT NOT NULL DEFAULT 'draft',    -- draft | confirmed | published
     results_published_at  TEXT,                             -- UTC of publish
@@ -399,11 +400,13 @@ CREATE TABLE IF NOT EXISTS competitions (
     is_demo               INTEGER NOT NULL DEFAULT 0,       -- 1 = demo seed row
     created_at            TEXT NOT NULL,                    -- UTC creation timestamp
     updated_at            TEXT NOT NULL,                    -- UTC last update timestamp
-    FOREIGN KEY (venue_club_id) REFERENCES clubs(id) ON DELETE SET NULL
+    FOREIGN KEY (venue_club_id) REFERENCES clubs(id) ON DELETE SET NULL,
+    FOREIGN KEY (banner_media_id) REFERENCES media(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_competitions_status ON competitions(status);
 CREATE INDEX IF NOT EXISTS idx_competitions_venue ON competitions(venue_club_id);
 CREATE INDEX IF NOT EXISTS idx_competitions_start ON competitions(start_at);
+CREATE INDEX IF NOT EXISTS idx_competitions_banner ON competitions(banner_media_id);
 
 -- -----------------------------------------------------------------------------
 -- competition_rades
@@ -473,6 +476,12 @@ CREATE INDEX IF NOT EXISTS idx_signups_rider ON signups(rider_user_id);
 CREATE INDEX IF NOT EXISTS idx_signups_horse ON signups(horse_id);
 CREATE INDEX IF NOT EXISTS idx_signups_status ON signups(status);
 CREATE INDEX IF NOT EXISTS idx_signups_rade ON signups(competition_rade_id);
+-- Club affiliation: club reports, club dashboards and club-scoped signup lists
+-- filter on this column (previously a full scan + temp B-tree per report row).
+CREATE INDEX IF NOT EXISTS idx_signups_affiliation_club ON signups(affiliation_club_id);
+-- Chronology: signup grids, ranking windows and daily dashboard buckets.
+CREATE INDEX IF NOT EXISTS idx_signups_created ON signups(created_at);
+CREATE INDEX IF NOT EXISTS idx_signups_status_created ON signups(status, created_at);
 -- Duplicate guard: a rider+horse+rade is unique unless cancelled/withdrawn.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_signups_active
     ON signups(competition_id, competition_rade_id, rider_user_id, horse_id)
@@ -506,6 +515,10 @@ CREATE TABLE IF NOT EXISTS payment_orders (
 );
 CREATE INDEX IF NOT EXISTS idx_orders_status ON payment_orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_signup ON payment_orders(signup_id);
+-- Revenue windows (dashboard tiles, time series, report summaries) filter by
+-- status + verified_at, so the composite covers both predicate and range.
+CREATE INDEX IF NOT EXISTS idx_orders_verified ON payment_orders(verified_at);
+CREATE INDEX IF NOT EXISTS idx_orders_status_verified ON payment_orders(status, verified_at);
 
 -- -----------------------------------------------------------------------------
 -- notifications

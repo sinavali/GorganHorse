@@ -305,7 +305,7 @@ final class SmsService
      */
     private function logDatabase(): Database
     {
-        $db = \App\Support\container('logs_db');
+        $db = container('logs_db');
         if (!$db instanceof Database) {
             throw new \App\Exceptions\ServerErrorException('SERVICE_UNAVAILABLE', 'Logs database is unavailable');
         }

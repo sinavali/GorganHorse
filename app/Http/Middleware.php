@@ -286,7 +286,7 @@ final class Middleware
         // Guest CSRF: use the per-request token registered at boot.
         if ($ctx->user === null && $guestMode) {
             try {
-                $expected = (string) \App\Support\container('guest_csrf');
+                $expected = (string) container('guest_csrf');
             } catch (\Throwable) {
                 $expected = '';
             }
@@ -304,8 +304,9 @@ final class Middleware
     /**
      * RateLimitMiddleware: applies a named rate limit rule.
      *
-     * Concrete limiting for auth flows is enforced inside AuthService; this
-     * middleware remains as an extension point (e.g. signup IP caps).
+     * Counters live in the main DB's rate_limits table and are upserted
+     * atomically with an in-place window reset (see below). AuthService still
+     * enforces its tighter per-identifier limits separately.
      *
      * @param MiddlewareContext $ctx  Context.
      * @param string            $rule Rule name (login, signup, otp).
@@ -314,7 +315,7 @@ final class Middleware
     public static function rateLimit(MiddlewareContext $ctx, string $rule): ?Response
     {
         try {
-            $db = \App\Support\container('db');
+            $db = container('db');
             if (!$db instanceof \App\Bootstrap\Database) { return null; }
             $ip = $ctx->request->ip();
             $bucket = 'route:' . $rule . ':' . $ip;
@@ -325,19 +326,25 @@ final class Middleware
                 'otp'    => 10,
                 default  => 60,
             };
-            $hits = (int) $db->scalar(
-                'SELECT COUNT(*) FROM rate_limits WHERE bucket = :b AND window_start > :w',
-                ['b' => $bucket, 'w' => utc_iso(time() - $window)]
+            $now = now_utc();
+            $cutoff = utc_iso(time() - $window);
+            /* Atomic counter: the row is upserted in one statement, and the
+               window is reset in place when it has expired. A plain INSERT
+               collided with UNIQUE(bucket) after the first hit, which is why
+               the counter could never exceed 1. */
+            $db->execute(
+                'INSERT INTO rate_limits (bucket, hits, window_start, updated_at)
+                 VALUES (:b, 1, :now, :now2)
+                 ON CONFLICT(bucket) DO UPDATE SET
+                     hits = CASE WHEN rate_limits.window_start < :cutoff THEN 1 ELSE rate_limits.hits + 1 END,
+                     window_start = CASE WHEN rate_limits.window_start < :cutoff THEN :now3 ELSE rate_limits.window_start END,
+                     updated_at = :now4',
+                ['b' => $bucket, 'now' => $now, 'now2' => $now, 'cutoff' => $cutoff, 'now3' => $now, 'now4' => $now]
             );
-            if ($hits >= $cap) {
+            $hits = (int) $db->scalar('SELECT hits FROM rate_limits WHERE bucket = :b', ['b' => $bucket], 0);
+            if ($hits > $cap) {
                 return Response::json(['ok' => false, 'data' => null, 'errors' => [['code' => 'RATE_LIMITED', 'field' => null, 'message' => 'Too many requests']], 'meta' => [], 'csrf' => $ctx->csrf], 429);
             }
-            $db->insert('rate_limits', [
-                'bucket' => $bucket,
-                'hits' => 1,
-                'window_start' => now_utc(),
-                'updated_at' => now_utc(),
-            ]);
         } catch (\Throwable) {
             // Rate limiting must never break the request.
         }

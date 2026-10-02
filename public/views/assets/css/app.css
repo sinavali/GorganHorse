@@ -29,6 +29,16 @@ html.dark{
   --shadow-lg:0 30px 70px -28px rgba(0,0,0,.85);
 }
 *{box-sizing:border-box}
+/* Vazirmatn, vendored (see assets/fonts/README.md). The CSS font-family name
+   below was only ever a hopeful "Vazirmatn if the machine has it" — nothing
+   declared it, so the whole panel and the public competition page rendered in
+   Tahoma. font-display:swap keeps text readable while the file loads. */
+@font-face{font-family:Vazirmatn;font-style:normal;font-weight:100 900;font-display:swap;
+  src:url(../fonts/vazirmatn-arabic-var.woff2) format('woff2-variations');
+  unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0898-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FEFF,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EEBB}
+@font-face{font-family:Vazirmatn;font-style:normal;font-weight:100 900;font-display:swap;
+  src:url(../fonts/vazirmatn-latin-var.woff2) format('woff2-variations');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--text);font-size:14px;font-family:Vazirmatn,Tahoma,system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
 h1,h2,h3,h4{margin:0;letter-spacing:-.01em}
@@ -209,6 +219,9 @@ html.rtl #drw{transform:translateX(-103%)}
 .tabb{padding:10px 2px;font-size:13px;font-weight:600;color:var(--muted);border:0;border-bottom:2px solid transparent;cursor:pointer;background:none;white-space:nowrap}
 .tabb.on{color:var(--brand);border-bottom-color:var(--brand)}
 .rl{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+/* Selected rade card in the rider signup page: the chosen class has to be
+   obvious, because the form silently used to keep asking for it. */
+.rl.sel{margin:0 -10px;padding:10px;border-radius:12px;background:var(--brand-soft);border-bottom-color:transparent}
 .rl:last-child{border-bottom:0}
 .dd{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);z-index:70;min-width:170px;overflow:hidden;display:none}
 .dd.on{display:block}
@@ -234,6 +247,56 @@ html.rtl #drw{transform:translateX(-103%)}
 .imgrow .imgc{position:relative;width:92px;height:92px;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
 .imgrow img{width:100%;height:100%;object-fit:cover}
 .imgrow .del{position:absolute;top:4px;inset-inline-end:4px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:8px;width:22px;height:22px;display:grid;place-items:center;cursor:pointer}
+
+/* ---- masked secrets (share codes) ---- */
+.secret{display:inline-flex;align-items:center;gap:4px}
+.secret-v{letter-spacing:.12em;font-weight:700;transition:filter .12s}
+.secret-mask{letter-spacing:.18em;color:var(--muted);font-weight:700}
+.secret .btn-i{padding:4px}
+.secret-panel{position:relative}
+
+/* ---- horse gallery (up to `horses.max_images`) ---- */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.gallery .gcell{position:relative;aspect-ratio:4/3;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--surface-3)}
+.gallery .gzoom{display:block;width:100%;height:100%;padding:0;border:0;background:none;cursor:zoom-in}
+.gallery .gcell img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s ease}
+.gallery .gcell:hover img{transform:scale(1.05)}
+.gallery .gcover{position:absolute;top:6px;inset-inline-start:6px;background:var(--brand);color:#fff;font-size:10.5px;font-weight:700;border-radius:99px;padding:2px 9px;pointer-events:none}
+.gallery .gnum{position:absolute;bottom:6px;inset-inline-end:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10.5px;border-radius:99px;padding:2px 8px;pointer-events:none}
+.gallery .gdel{position:absolute;top:6px;inset-inline-end:6px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:8px;width:24px;height:24px;display:grid;place-items:center;cursor:pointer}
+.gallery .gdel:hover{background:var(--danger)}
+.gallery .gadd{display:grid;place-items:center;gap:4px;border:1.5px dashed var(--border);border-radius:12px;background:transparent;color:var(--muted);min-height:110px;cursor:pointer;font-size:12px}
+.gallery .gadd:hover{border-color:var(--brand);color:var(--brand)}
+.gal-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
+/* Lightbox */
+.lb{position:fixed;inset:0;z-index:220;background:rgba(12,18,15,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:22px}
+.lb img{max-width:92vw;max-height:78vh;border-radius:12px;object-fit:contain;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.lb-bar{display:flex;align-items:center;gap:10px;color:#e7ece9;font-size:13px}
+.lb-bar button{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:10px;width:38px;height:38px;display:grid;place-items:center;cursor:pointer;font-size:17px}
+.lb-bar button:hover{background:rgba(255,255,255,.24)}
+.lb-bar button:disabled{opacity:.3;cursor:default}
+
+/* ---- wide competition banner ---- */
+.comp-banner{position:relative;margin-bottom:16px;border-radius:16px;overflow:hidden;border:1px solid var(--border);background:var(--surface-3)}
+.comp-banner img{display:block;width:100%;height:clamp(160px,26vw,320px);object-fit:cover}
+.comp-banner .cb-empty{display:grid;place-items:center;gap:6px;min-height:130px;color:var(--muted);font-size:12.5px;border:1.5px dashed var(--border);border-radius:16px;background:var(--surface-3)}
+.comp-banner .cb-ops{position:absolute;bottom:10px;inset-inline-end:10px;display:flex;gap:6px}
+.comp-banner .cb-ops .btn{background:rgba(0,0,0,.6);color:#fff;border-color:transparent}
+.comp-banner .cb-ops .btn:hover{background:rgba(0,0,0,.78)}
+.comp-banner .cb-cap{position:absolute;bottom:0;inset-inline:0;padding:26px 16px 12px;background:linear-gradient(to top,rgba(10,16,13,.72),transparent);color:#fff}
+.comp-banner .cb-cap b{font-size:16px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+
+/* ---- rade accordion (signups grouped per rade) ---- */
+.stack{display:flex;flex-direction:column;gap:8px}
+.rade-acc{border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden}
+.rade-acc[open]{box-shadow:var(--shadow)}
+.rade-acc-h{display:flex;align-items:center;gap:9px;padding:11px 13px;cursor:pointer;list-style:none;flex-wrap:wrap}
+.rade-acc-h::-webkit-details-marker{display:none}
+.rade-acc-h:hover{background:var(--surface-3)}
+.rade-acc-h .acc-i{display:inline-flex;transition:transform .18s ease;color:var(--muted)}
+.rade-acc[open] .rade-acc-h .acc-i{transform:rotate(90deg)}
+.rade-acc-b{border-top:1px solid var(--border);padding:10px}
+.rade-acc-b .tw{box-shadow:none;border:0}
 
 /* ---- Jalali/Gregorian date & datetime picker ---- */
 .ghf-dp-input{cursor:pointer;background-image:none}
@@ -291,14 +354,71 @@ html.rtl #drw{transform:translateX(-103%)}
 .edt-body p{margin:7px 0}
 .edt-body ul,.edt-body ol{padding-inline-start:22px;margin:7px 0}
 .edt-body h3{font-size:15px;margin:10px 0 4px}
+.edt-body h4{font-size:14px;margin:9px 0 4px;color:var(--muted)}
+.edt-body blockquote{margin:9px 0;padding:6px 12px;border-inline-start:3px solid var(--primary);
+  background:var(--surface-3);border-radius:0 8px 8px 0;color:var(--muted)}
+.edt-body hr{border:0;border-top:1px solid var(--border);margin:12px 0}
+.edt-body img{max-width:100%;height:auto;border-radius:10px;display:block;margin:8px 0}
+.edt-bar{flex-wrap:wrap;row-gap:2px}
+.edt-sep{width:1px;height:18px;background:var(--border);margin:0 3px;flex:none}
+.edt-src-ta{min-height:190px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.7}
+
+/* ---- Quill (vendored, see assets/vendor/README.md) ----
+   Quill ships no CSS here on purpose: quill.snow.css is LTR-first and would
+   fight the panel's tokens. These rules give it the panel look, RTL direction
+   and a clear drop target. */
+.edt-rich .edt-q{min-height:190px}
+.edt-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:5px 6px;
+  background:var(--surface-3);border:1px solid var(--border);border-radius:12px 12px 0 0}
+.edt-group{display:inline-flex;align-items:center;gap:1px}
+.edt-end{margin-inline-start:auto}
+.edt-b{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 5px;border:0;
+  border-radius:7px;background:transparent;color:var(--text);cursor:pointer;font-size:13px}
+.edt-b:hover{background:var(--surface);color:var(--primary)}
+.edt-b.on,.edt-b.ql-active{background:var(--primary);color:#fff}
+.edt-b .ic{width:15px;height:15px}
+.edt-bt{font-size:11.5px;padding-inline-start:3px}
+.edt-flip{transform:scaleX(-1)}
+.edt-pick{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:7px;
+  height:28px;padding:0 8px;font-size:12.5px;font-family:inherit;cursor:pointer;max-width:130px}
+.edt-pick:focus{outline:2px solid var(--primary);outline-offset:1px}
+.ql-container.ql-snow{border:1px solid var(--border);border-top:0;border-radius:0 0 12px 12px;background:var(--surface);font-family:inherit}
+.ql-editor{min-height:190px;font-size:13.5px;line-height:2;padding:12px 14px}
+.ql-editor.ql-blank::before{color:var(--muted);font-style:normal}
+.ql-editor p{margin:0 0 9px}
+.ql-editor h2{font-size:17px;margin:14px 0 6px}
+.ql-editor h3{font-size:15px;margin:12px 0 5px}
+.ql-editor h4{font-size:14px;margin:11px 0 5px;color:var(--muted)}
+.ql-editor ul,.ql-editor ol{padding-inline-start:22px}
+.ql-editor li{margin:3px 0}
+.ql-editor blockquote{border-inline-start:3px solid var(--primary);padding:2px 12px;
+  color:var(--muted);background:var(--surface-3);border-radius:0 8px 8px 0}
+.ql-editor pre,.edt-src-on{border-radius:8px;background:var(--surface-3);padding:8px 10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;direction:ltr;text-align:left}
+.ql-editor img{border-radius:10px;max-width:100%;display:block;margin:10px 0}
+.ql-editor a{color:var(--primary);text-decoration:underline}
+.ql-editor sub,.ql-editor sup{font-size:11.5px}
+/* Drop a file anywhere on the field to embed it. */
+.edt-q.ql-drag-hover .ql-editor{background:var(--brand-soft);outline:2px dashed var(--primary);outline-offset:-3px}
+.edt-src-on{border-color:var(--primary)}
+.edt-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:6px}
 
 /* ---- rendered rich text ---- */
 .rich{line-height:2}
 .rich p{margin:0 0 9px}
 .rich ul,.rich ol{padding-inline-start:22px;margin:0 0 9px}
 .rich h3,.rich h4{font-size:14.5px;margin:12px 0 5px}
+.rich h4{font-size:13.5px;color:var(--muted)}
 .rich a{color:var(--primary);text-decoration:underline}
 .rich ul:last-child,.rich ol:last-child,.rich p:last-child{margin-bottom:0}
+.rich blockquote{margin:11px 0;padding:7px 13px;border-inline-start:3px solid var(--primary);
+  background:var(--surface-3);border-radius:0 9px 9px 0;color:var(--muted)}
+.rich hr{border:0;border-top:1px solid var(--border);margin:14px 0}
+.rich img{max-width:100%;height:auto;border-radius:11px;display:block;margin:10px 0}
+.rich table{width:100%;border-collapse:collapse;font-size:13px;margin:9px 0}
+.rich th,.rich td{border:1px solid var(--border);padding:7px 10px;text-align:right}
+.rich th{background:var(--surface-3)}
+.rich code{background:var(--surface-3);border-radius:6px;padding:1px 6px;font-size:12.5px}
 
 /* ---- capacity / progress bar ---- */
 .capbar{min-width:110px}
@@ -387,6 +507,11 @@ tr.rk3 td{background:var(--brand-soft)}
 .nsec .ic{font-size:12px;transition:transform .18s}
 .nsec[aria-expanded="false"] .ic{transform:rotate(-90deg)}
 .nsec-items{display:flex;flex-direction:column;gap:1px}
+/* An author `display` declaration beats the UA `[hidden]{display:none}` rule,
+   so folding a section away silently did nothing and every group stayed open.
+   Drive visibility from aria-expanded so it cannot drift from the DOM again. */
+.nsec[aria-expanded="false"] + .nsec-items,
+.nsec-items[hidden]{display:none}
 
 /* ---- table density + sortable headers ---- */
 html[data-density="compact"] .tb td{height:34px;padding-top:5px;padding-bottom:5px}
@@ -502,6 +627,14 @@ th.sorted-asc .srt,th.sorted-desc .srt{color:var(--brand);opacity:1}
   .badge{display:inline-block!important;border:1px solid #999!important;padding:0 2mm;
     border-radius:2mm;font-size:8.5pt;color:#000!important;background:#f0f0f0!important}
   .inp,.sel,.ta{border:none!important;padding:0!important;background:transparent!important}
+
+  /* Share codes are secrets and must never land on paper. */
+  .secret{display:none!important}
+
+  /* Selection checkboxes and per-row action buttons have no meaning on paper:
+     an empty checkbox column and a column of invisible buttons waste half a
+     page of the printed grid. Declared opt-out via data-no-print. */
+  table.tb th[data-no-print],table.tb td[data-no-print]{display:none!important}
 
   /* keep single records intact */
   .grid-dl dt{font-weight:700}
