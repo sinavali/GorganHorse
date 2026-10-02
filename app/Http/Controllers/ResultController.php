@@ -141,7 +141,7 @@ final class ResultController extends BaseController
             $filename = 'rider-ranking-' . gmdate('Ymd') . '.csv';
             $path = BASE_PATH . '/cache/' . $filename;
             @file_put_contents($path, $lines);
-            return Response::download($path, $filename);
+            return $this->tempDownload($path, $filename);
         }
 
         return $this->ok(['rows' => $rows, 'total' => count($rows), 'limit' => $limit], $ctx);

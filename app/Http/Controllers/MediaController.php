@@ -84,15 +84,25 @@ final class MediaController extends BaseController
 
         $mime = (string) ($media['mime'] ?? 'application/octet-stream');
         $name = (string) ($media['original_name'] ?? basename($real));
-        $response = new Response(
-            (string) file_get_contents($real),
-            200,
-            [
-                'Content-Type' => $mime,
-                'Content-Disposition' => 'inline; filename="' . str_replace('"', '', $name) . '"',
-                'Cache-Control' => 'private, max-age=86400',
-            ]
-        );
+        $etag = '"' . substr(sha1((string) ($media['uuid'] ?? $real) . ':' . (string) filesize($real)), 0, 32) . '"';
+        $headers = [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . str_replace('"', '', $name) . '"',
+            'Cache-Control' => 'private, max-age=86400',
+            'ETag' => $etag,
+        ];
+        // Conditional request: a browser that already has the bytes sends the
+        // ETag back and gets a cheap 304 instead of a second download.
+        if (trim((string) $request->header('if-none-match')) === $etag) {
+            return new Response('', 304, $headers);
+        }
+        /* Response::download streams the file with readfile() and a
+           Content-Length header, so the whole file (up to 25 MB) is never
+           buffered in memory the way file_get_contents() did. */
+        $response = Response::download($real, $name);
+        foreach ($headers as $header => $value) {
+            $response = $response->withHeader($header, $value);
+        }
         return $response;
     }
 }

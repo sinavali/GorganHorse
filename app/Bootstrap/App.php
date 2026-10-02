@@ -563,6 +563,26 @@ final class Route
         public readonly mixed $handler,
         public readonly array $middleware = []
     ) {
+        // First literal path segment, used by Router to skip unrelated routes
+        // before running the pattern regex (about 150 routes per request).
+        $probe = ltrim($path, '/');
+        $this->segment = substr($probe, 0, strcspn($probe, '/{'));
+    }
+
+    /** @var string First literal path segment ('' when the route starts with a parameter). */
+    private string $segment;
+    /** @var string|null Compiled regex for parameterised paths (built once). */
+    private ?string $compiled = null;
+
+    /**
+     * Whether this route can match a path with the given first segment.
+     *
+     * @param string $first First path segment of the request path.
+     * @return bool
+     */
+    public function mayMatchFirstSegment(string $first): bool
+    {
+        return $this->segment === '' || $this->segment === $first;
     }
 
     /**
@@ -576,9 +596,10 @@ final class Route
         if (!str_contains($this->path, '{')) {
             return $this->path === $path ? [] : null;
         }
-        $pattern = preg_replace('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', '(?P<$1>[^/]+)', $this->path);
-        $pattern = '#^' . $pattern . '$#';
-        if (preg_match($pattern, $path, $m) !== 1) {
+        if ($this->compiled === null) {
+            $this->compiled = '#^' . preg_replace('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', '(?P<$1>[^/]+)', $this->path) . '$#';
+        }
+        if (preg_match($this->compiled, $path, $m) !== 1) {
             return null;
         }
         $params = [];
@@ -624,8 +645,12 @@ final class Router
     public function match(string $method, string $path): ?array
     {
         $method = strtoupper($method);
+        $first = self::firstSegment($path);
         foreach ($this->routes as $route) {
             if ($route->method !== $method) {
+                continue;
+            }
+            if (!$route->mayMatchFirstSegment($first)) {
                 continue;
             }
             $params = $route->match($path);
@@ -637,6 +662,18 @@ final class Router
     }
 
     /**
+     * Extract the first path segment (used for the route-index skip).
+     *
+     * @param string $path Request path.
+     * @return string
+     */
+    private static function firstSegment(string $path): string
+    {
+        $probe = ltrim($path, '/');
+        return substr($probe, 0, strcspn($probe, '/'));
+    }
+
+    /**
      * Determine whether a path is claimed by any route (any method).
      *
      * @param string $path Request path.
@@ -644,7 +681,9 @@ final class Router
      */
     public function hasPath(string $path): bool
     {
+        $first = self::firstSegment($path);
         foreach ($this->routes as $route) {
+            if (!$route->mayMatchFirstSegment($first)) { continue; }
             if ($route->match($path) !== null) { return true; }
         }
         return false;

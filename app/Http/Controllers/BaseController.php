@@ -128,4 +128,22 @@ abstract class BaseController
         return $request->post();
     }
 
+    /**
+     * Download a generated temporary file and delete it after the response.
+     *
+     * CSV exports are written to cache/ because Response streams downloads
+     * from disk; without the shutdown cleanup those files accumulate forever.
+     *
+     * @param string $path Absolute path of the generated file.
+     * @param string $name Download filename.
+     * @return Response
+     */
+    protected function tempDownload(string $path, string $name): Response
+    {
+        register_shutdown_function(static function () use ($path): void {
+            if (is_file($path)) { @unlink($path); }
+        });
+        return Response::download($path, $name);
+    }
+
 }

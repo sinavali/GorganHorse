@@ -194,7 +194,7 @@ final class SmsTemplateController extends BaseController
             $filename = 'sms-delivery-' . gmdate('Ymd-His') . '.csv';
             $path = BASE_PATH . '/cache/' . $filename;
             @file_put_contents($path, $lines);
-            return Response::download($path, $filename);
+            return $this->tempDownload($path, $filename);
         }
 
         $sql .= ' ORDER BY id DESC LIMIT 50';

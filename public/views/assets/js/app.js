@@ -690,12 +690,15 @@ App.enter=function(){
    authenticated request has to bounce the browser back to the installer
    instead of leaving a dead shell on screen. */
 function watchInstallState(){
+  /* The install flag only flips when an admin wipes the database, which is
+     rare: poll every 5 minutes instead of every 60 s, and skip hidden tabs so
+     a background tab does not keep requesting /panel/requirements. */
   setInterval(function(){
-    if(!App.user){return;}
+    if(!App.user||document.visibilityState==='hidden'){return;}
     API.get('/panel/requirements').then(function(info){
       if(info&&info.installed===false){location.href='/install';}
     }).catch(function(){});
-  },60000);
+  },300000);
 }
 
 function loadSession(){

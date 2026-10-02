@@ -19,6 +19,16 @@ server {
 
     client_max_body_size 30m;
 
+    # The panel ships unminified JS/CSS by design (no build step), so text
+    # compression is the biggest transfer win: gzip cuts the SPA payload by
+    # roughly 70-75%. gzip_static can serve precompressed .gz copies if the
+    # operator generates them (see docs/Features.md, "no build step").
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml application/xml;
+
     # Deny direct access to application-sensitive folders. These live outside the
     # web root on a correct deployment, but the rule keeps a mis-pointed root safe.
     location ~ ^/(app|database|vendor|cache|logs|backups|cultures|tests)/ {

@@ -323,7 +323,7 @@ Edit policy:
 
 - Status: Implemented
 - Description: Unified search across all entities — competitions, riders, horses, clubs, signups — by name, phone, microchip, or other identifiers, reachable from the topbar (spec §5.3 "Global search (spotlight)").
-- Notes: `GET /api/search?q=` (`SearchController`) returns grouped results for the five entity types, each capped at 10 rows. The topbar's `Ctrl+K` command palette (`#cmdk`) queries it live and deep-links every hit into the matching detail page; `/search` renders the same groups as a full page. No FTS5 index — the panel runs on plain `LIKE` queries, which is fast enough at this data size.
+- Notes: `GET /api/search?q=` (`SearchController`) returns grouped results for the five entity types, each capped at 10 rows. The topbar's `Ctrl+K` command palette (`#cmdk`) queries it live and deep-links every hit into the matching detail page; `/search` renders the same groups as a full page. The query must be at least 3 characters, and matching uses an anchored prefix (`term%`, not `%term%`) so the scan stays index-friendly; microchip numbers keep a contains match because operators search by trailing digits. No FTS5 index — plain `LIKE` queries remain fast enough at this data size (audit finding #10).
 - Considerations: A global search dramatically improves usability for admins and managers who work across all entity types daily.
 - Status Description: Fully implemented as a `Ctrl+K` spotlight over `/api/search`, with a full `/search` page behind the topbar's advanced-search button.
 

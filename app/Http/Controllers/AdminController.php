@@ -96,7 +96,7 @@ final class AdminController extends BaseController
             $filename = 'audit-log-' . gmdate('Ymd-His') . '.csv';
             $path = BASE_PATH . '/cache/' . $filename;
             @file_put_contents($path, $lines);
-            return Response::download($path, $filename);
+            return $this->tempDownload($path, $filename);
         }
 
         $total = (int) $db->scalar('SELECT COUNT(*) FROM audit_logs WHERE ' . $whereSql, $params);

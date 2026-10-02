@@ -70,7 +70,49 @@ final class InstallerService
                 'detail' => is_dir($path) ? (is_writable($path) ? 'قابل نوشتن' : 'غیرقابل نوشتن') : 'وجود ندارد',
             ];
         }
+        /* The panel advertises 25 MB documents (uploads.max_doc_mb) and 50k-row
+           exports, but PHP itself rejects larger uploads first with
+           UPLOAD_ERR_INI_SIZE ("Upload failed (error 1)"). Surface the ini
+           limits so the operator can raise them before users hit that. */
+        $iniUpload = self::iniBytes((string) ini_get('upload_max_filesize'));
+        $iniPost = self::iniBytes((string) ini_get('post_max_size'));
+        $minDoc = 25 * 1024 * 1024;
+        $checks[] = [
+            'label' => 'حداقل upload_max_filesize (۲۵ مگابایت)',
+            'ok' => $iniUpload < 0 || $iniUpload >= $minDoc,
+            'detail' => $iniUpload < 0 ? 'نامحدود' : human_filesize($iniUpload) . ($iniUpload >= $minDoc ? ' ✓' : ' — مقدار پیشنهادی 25M'),
+        ];
+        $checks[] = [
+            'label' => 'حداقل post_max_size (۲۶ مگابایت)',
+            'ok' => $iniPost < 0 || $iniPost >= 26 * 1024 * 1024,
+            'detail' => $iniPost < 0 ? 'نامحدود' : human_filesize($iniPost) . ($iniPost >= 26 * 1024 * 1024 ? ' ✓' : ' — مقدار پیشنهادی 26M'),
+        ];
+        $memory = self::iniBytes((string) ini_get('memory_limit'));
+        $checks[] = [
+            'label' => 'حداقل memory_limit (۱۲۸ مگابایت)',
+            'ok' => $memory < 0 || $memory >= 128 * 1024 * 1024,
+            'detail' => $memory < 0 ? 'نامحدود' : human_filesize($memory),
+        ];
         return $checks;
+    }
+
+    /**
+     * Parse a php.ini shorthand size ("8M", "128M", "-1") into bytes.
+     *
+     * @param string $value ini value.
+     * @return int Bytes, or -1 for unlimited.
+     */
+    private static function iniBytes(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '' || $value === '-1') { return -1; }
+        $number = (int) $value;
+        return match (strtolower(substr($value, -1))) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => $number,
+        };
     }
 
     /**

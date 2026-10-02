@@ -81,8 +81,15 @@ final class ReportController extends BaseController
         if (!is_file($path)) {
             return $this->fail('NOT_FOUND', 'Export expired or not found', $ctx, 404);
         }
-        $meta = json_decode((string) file_get_contents($path . '.meta'), true) ?: [];
+        $meta = json_decode((string) @file_get_contents($path . '.meta'), true) ?: [];
         $filename = (string) ($meta['filename'] ?? 'report.csv');
+        // The token is one-shot in practice: after the download completes,
+        // delete the payload and its meta file instead of leaving them in
+        // cache/exports until the next manual cleanup.
+        register_shutdown_function(static function () use ($path): void {
+            if (is_file($path)) { @unlink($path); }
+            if (is_file($path . '.meta')) { @unlink($path . '.meta'); }
+        });
         return Response::download($path, $filename);
     }
 
@@ -174,8 +181,15 @@ final class ReportController extends BaseController
         $dir = BASE_PATH . '/cache/exports';
         if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
         $path = $this->exportPath($token);
-        $csv = $this->c->get('reports')->toCsv($payload);
-        file_put_contents($path, $csv);
+        $handle = fopen($path, 'wb');
+        if ($handle === false) {
+            throw new \App\Exceptions\ServerErrorException('SERVER_ERROR', 'Cannot write export file', 500);
+        }
+        try {
+            $this->c->get('reports')->writeCsv($payload, $handle);
+        } finally {
+            fclose($handle);
+        }
         file_put_contents($path . '.meta', json_encode(['filename' => $payload['filename']]));
     }
 

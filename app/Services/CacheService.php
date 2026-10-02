@@ -84,10 +84,22 @@ final class CacheService
         if (!$this->enabled) { return; }
         $dir = $this->dir($namespace);
         if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
-        @file_put_contents($this->path($namespace, $key), json_encode([
+        $payload = json_encode([
             'expires' => time() + $ttl,
             'value' => $value,
-        ], JSON_UNESCAPED_UNICODE));
+        ], JSON_UNESCAPED_UNICODE);
+        if ($payload === false) { return; }
+        // Atomic write (temp + rename): a reader must never see a half-written
+        // cache file while another request is refreshing the same entry.
+        $path = $this->path($namespace, $key);
+        $tmp = $path . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        if (@file_put_contents($tmp, $payload) === false) {
+            @unlink($tmp);
+            return;
+        }
+        if (!@rename($tmp, $path)) {
+            @unlink($tmp);
+        }
     }
 
     /**

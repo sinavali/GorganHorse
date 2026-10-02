@@ -295,7 +295,7 @@ final class HorseController extends BaseController
         $t = $this->c->get('horses')->exportTemplate();
         $path = BASE_PATH . '/cache/' . $t['filename'];
         file_put_contents($path, $t['content']);
-        return Response::download($path, $t['filename']);
+        return $this->tempDownload($path, $t['filename']);
     }
 
     /**
@@ -310,7 +310,7 @@ final class HorseController extends BaseController
         $c = $this->c->get('horses')->exportCsv($this->input($request), $ctx->actor());
         $path = BASE_PATH . '/cache/' . $c['filename'];
         file_put_contents($path, $c['content']);
-        return Response::download($path, $c['filename']);
+        return $this->tempDownload($path, $c['filename']);
     }
 
     /**
