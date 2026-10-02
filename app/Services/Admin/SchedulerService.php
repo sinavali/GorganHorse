@@ -72,12 +72,24 @@ final class SchedulerService
      */
     public function runAll(): array
     {
-        return [
-            'deadline_alerts' => $this->deadlineAlerts(),
-            'auto_verification' => $this->autoVerifyRiders(),
-            'auto_backup' => $this->autoBackup(),
-            'session_cleanup' => $this->cleanSessions(),
+        $jobs = [
+            'deadline_alerts' => fn (): array => $this->deadlineAlerts(),
+            'auto_verification' => fn (): array => $this->autoVerifyRiders(),
+            'auto_backup' => fn (): array => $this->autoBackup(),
+            'session_cleanup' => fn (): array => $this->cleanSessions(),
         ];
+        $out = [];
+        foreach ($jobs as $key => $job) {
+            try {
+                $out[$key] = $job();
+            } catch (\Throwable $e) {
+                /* One failing job must never abort the rest: a broken backup
+                   used to stop session cleanup from ever running. */
+                $this->log->app('error', 'scheduler: job failed', ['job' => $key, 'error' => $e->getMessage()]);
+                $out[$key] = ['ran' => false, 'count' => 0, 'note' => 'failed'];
+            }
+        }
+        return $out;
     }
 
     /**
@@ -172,7 +184,7 @@ final class SchedulerService
         );
         $rows = is_array($rows) ? $rows : [];
 
-        $users = \App\Support\container('users');
+        $users = container('users');
         $count = 0;
         foreach ($rows as $r) {
             try {
@@ -203,7 +215,7 @@ final class SchedulerService
         if ((string) $this->settings->get($marker, '') !== '') {
             return ['ran' => false, 'count' => 0, 'note' => 'already_done_today'];
         }
-        $backup = \App\Support\container('backup');
+        $backup = container('backup');
         try {
             $backup->create('auto-' . $today, null);
             $this->settings->set($marker, (string) time());
@@ -223,8 +235,50 @@ final class SchedulerService
     public function cleanSessions(): array
     {
         $now = now_utc();
-        $sessions = (int) $this->db->scalar('DELETE FROM sessions WHERE expires_at < :n', ['n' => $now]);
-        $tokens = (int) $this->db->scalar('DELETE FROM api_tokens WHERE expires_at < :n', ['n' => $now]);
-        return ['ran' => true, 'count' => $sessions + $tokens];
+        // execute() returns the affected row count. scalar() on a DELETE always
+        // fetched false, so this job used to report "0 deleted" even though it
+        // was deleting rows.
+        $sessions = $this->db->execute('DELETE FROM sessions WHERE expires_at < :n', ['n' => $now]);
+        $tokens = $this->db->execute('DELETE FROM api_tokens WHERE expires_at < :n', ['n' => $now]);
+        $temporary = $this->sweepTemporaryFiles();
+        // Refresh planner statistics after the day's data churn.
+        try {
+            $this->db->exec('PRAGMA optimize');
+        } catch (\Throwable) {
+            // Statistics refresh is best-effort.
+        }
+        return ['ran' => true, 'count' => $sessions + $tokens + $temporary];
+    }
+
+    /**
+     * Delete generated CSV/report files older than an hour.
+     *
+     * Downloads now delete their file when the response finishes, and this
+     * sweep catches anything left behind by an interrupted download, an
+     * expired report token or a crash, so cache/ does not grow forever.
+     *
+     * @return int Number of files removed.
+     */
+    private function sweepTemporaryFiles(): int
+    {
+        $removed = 0;
+        $cutoff = time() - 3600;
+        $patterns = [
+            BASE_PATH . '/cache/exports/*.csv',
+            BASE_PATH . '/cache/exports/*.meta',
+            BASE_PATH . '/cache/audit-log-*.csv',
+            BASE_PATH . '/cache/sms-delivery-*.csv',
+            BASE_PATH . '/cache/rider-ranking-*.csv',
+            BASE_PATH . '/cache/horses-*.csv',
+        ];
+        foreach ($patterns as $pattern) {
+            foreach (glob($pattern) ?: [] as $file) {
+                if (is_file($file) && (int) @filemtime($file) < $cutoff) {
+                    @unlink($file);
+                    $removed++;
+                }
+            }
+        }
+        return $removed;
     }
 }
