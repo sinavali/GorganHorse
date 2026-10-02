@@ -22,6 +22,7 @@ declare(strict_types=1);
 namespace App\Services\Report;
 
 use App\Bootstrap\Database;
+use App\Services\CacheService;
 
 /**
  * Interface: ReportInterface
@@ -415,12 +416,43 @@ final class RevenueReport extends BaseReport
         $row = $db->selectOne('SELECT COALESCE(SUM(CASE WHEN po.status=\'paid\' THEN po.amount_irt ELSE 0 END),0) AS total,
             COALESCE(AVG(CASE WHEN po.status=\'paid\' THEN po.amount_irt END),0) AS avg_amount
             ' . $this->baseFrom() . ' WHERE ' . $where, $params) ?? [];
-        $top = $db->selectOne("SELECT cl.name AS top_club, COUNT(*) AS c FROM payment_orders po JOIN signups s ON s.id = po.signup_id JOIN clubs cl ON cl.id = s.affiliation_club_id WHERE po.status='paid' GROUP BY cl.id ORDER BY c DESC LIMIT 1", []);
+        /* The top club is unfiltered and changes at most once a day, so cache
+           it per day instead of scanning payment_orders⋈signups⋈clubs on
+           every page of the revenue report. */
+        $fetchTop = fn (): string => $this->topClub($db);
+        try {
+            $cache = container('cache');
+            $topClub = $cache instanceof CacheService
+                ? (string) $cache->get('reports', 'revenue.top_club.' . gmdate('Y-m-d'), 86400, $fetchTop)
+                : $fetchTop();
+        } catch (\Throwable) {
+            $topClub = $fetchTop();
+        }
         return [
             'total_revenue' => (int) ($row['total'] ?? 0),
             'avg_per_signup' => (int) round((float) ($row['avg_amount'] ?? 0)),
-            'top_club' => $top['top_club'] ?? '—',
+            'top_club' => $topClub,
         ];
+    }
+
+    /**
+     * Name of the club with the most paid signups (all time).
+     *
+     * @param Database $db Main database.
+     * @return string Club name or an em dash.
+     */
+    private function topClub(Database $db): string
+    {
+        $top = $db->selectOne(
+            "SELECT cl.name AS top_club, COUNT(*) AS c
+             FROM payment_orders po
+             JOIN signups s ON s.id = po.signup_id
+             JOIN clubs cl ON cl.id = s.affiliation_club_id
+             WHERE po.status = 'paid'
+             GROUP BY cl.id ORDER BY c DESC LIMIT 1",
+            []
+        );
+        return (string) ($top['top_club'] ?? '—');
     }
 }
 
@@ -605,13 +637,31 @@ final class ClubsReport extends BaseReport
 {
     public static function key(): string { return 'clubs'; }
     public function label(): string { return 'باشگاه‌ها'; }
-    protected function baseFrom(): string { return 'FROM clubs cl'; }
+    protected function baseFrom(): string
+    {
+        /* Two grouped aggregates joined per club instead of three correlated
+           subqueries per row: the old shape scanned signups three times for
+           every club in the result set (and 50k times during an export). */
+        return 'FROM clubs cl
+                LEFT JOIN (SELECT s.affiliation_club_id AS club_id,
+                                  COUNT(DISTINCT s.rider_user_id) AS riders,
+                                  COUNT(*) AS signups
+                             FROM signups s
+                            WHERE s.affiliation_club_id IS NOT NULL
+                            GROUP BY s.affiliation_club_id) sa ON sa.club_id = cl.id
+                LEFT JOIN (SELECT s.affiliation_club_id AS club_id,
+                                  COALESCE(SUM(po.amount_irt), 0) AS revenue
+                             FROM payment_orders po
+                             JOIN signups s ON s.id = po.signup_id
+                            WHERE po.status = \'paid\' AND s.affiliation_club_id IS NOT NULL
+                            GROUP BY s.affiliation_club_id) ra ON ra.club_id = cl.id';
+    }
     protected function baseSelect(): array
     {
         return ['cl.id', 'cl.name', 'cl.city',
-            "(SELECT COUNT(DISTINCT s.rider_user_id) FROM signups s WHERE s.affiliation_club_id = cl.id) AS riders",
-            "(SELECT COUNT(*) FROM signups s WHERE s.affiliation_club_id = cl.id) AS signups",
-            "(SELECT COALESCE(SUM(po.amount_irt),0) FROM payment_orders po JOIN signups s ON s.id = po.signup_id WHERE s.affiliation_club_id = cl.id AND po.status='paid') AS revenue",
+            'COALESCE(sa.riders, 0) AS riders',
+            'COALESCE(sa.signups, 0) AS signups',
+            'COALESCE(ra.revenue, 0) AS revenue',
             'cl.created_at'];
     }
     public function columns(): array

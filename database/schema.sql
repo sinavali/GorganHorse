@@ -476,6 +476,12 @@ CREATE INDEX IF NOT EXISTS idx_signups_rider ON signups(rider_user_id);
 CREATE INDEX IF NOT EXISTS idx_signups_horse ON signups(horse_id);
 CREATE INDEX IF NOT EXISTS idx_signups_status ON signups(status);
 CREATE INDEX IF NOT EXISTS idx_signups_rade ON signups(competition_rade_id);
+-- Club affiliation: club reports, club dashboards and club-scoped signup lists
+-- filter on this column (previously a full scan + temp B-tree per report row).
+CREATE INDEX IF NOT EXISTS idx_signups_affiliation_club ON signups(affiliation_club_id);
+-- Chronology: signup grids, ranking windows and daily dashboard buckets.
+CREATE INDEX IF NOT EXISTS idx_signups_created ON signups(created_at);
+CREATE INDEX IF NOT EXISTS idx_signups_status_created ON signups(status, created_at);
 -- Duplicate guard: a rider+horse+rade is unique unless cancelled/withdrawn.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_signups_active
     ON signups(competition_id, competition_rade_id, rider_user_id, horse_id)
@@ -509,6 +515,10 @@ CREATE TABLE IF NOT EXISTS payment_orders (
 );
 CREATE INDEX IF NOT EXISTS idx_orders_status ON payment_orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_signup ON payment_orders(signup_id);
+-- Revenue windows (dashboard tiles, time series, report summaries) filter by
+-- status + verified_at, so the composite covers both predicate and range.
+CREATE INDEX IF NOT EXISTS idx_orders_verified ON payment_orders(verified_at);
+CREATE INDEX IF NOT EXISTS idx_orders_status_verified ON payment_orders(status, verified_at);
 
 -- -----------------------------------------------------------------------------
 -- notifications

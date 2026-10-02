@@ -32,42 +32,50 @@ final class SearchController extends BaseController
     public function search(Request $request, MiddlewareContext $ctx): Response
     {
         $q = trim((string) ($request->query('q', '')));
-        if ($q === '') {
-            return $this->ok([
-                'competitions' => [], 'riders' => [], 'horses' => [],
-                'clubs' => [], 'signups' => [],
-            ], $ctx);
+        $empty = [
+            'competitions' => [], 'riders' => [], 'horses' => [],
+            'clubs' => [], 'signups' => [],
+        ];
+        /* Require three characters: the command palette debounces 320 ms, so a
+           one- or two-letter query swept every table on almost every
+           keystroke. */
+        if (mb_strlen($q) < 3) {
+            return $this->ok($empty, $ctx);
         }
         $db = $this->c->get('db');
-        $like = '%' . $q . '%';
+        /* Prefix search (term%) instead of %term%: a leading wildcard makes
+           every scan unindexable. Microchip numbers keep a contains match
+           because operators routinely search by their trailing digits. */
+        $prefix = $q . '%';
+        $contains = '%' . $q . '%';
 
         $competitions = $db->select(
-            'SELECT id, title, status, city FROM competitions WHERE title LIKE :q OR city LIKE :q OR status LIKE :q ORDER BY id DESC LIMIT 10',
-            ['q' => $like]
+            'SELECT id, title, status, city FROM competitions WHERE title LIKE :q OR city LIKE :q ORDER BY id DESC LIMIT 10',
+            ['q' => $prefix]
         );
         $competitions = is_array($competitions) ? $competitions : [];
 
         $riders = $db->select(
             'SELECT id, role, username, phone, first_name, last_name FROM users WHERE first_name LIKE :q OR last_name LIKE :q OR username LIKE :q OR phone LIKE :q ORDER BY id DESC LIMIT 10',
-            ['q' => $like]
+            ['q' => $prefix]
         );
         $riders = is_array($riders) ? $riders : [];
 
         $horses = $db->select(
-            'SELECT h.id, h.name, h.microchip_number, h.gender, u.first_name AS owner_name FROM horses h LEFT JOIN users u ON h.owner_user_id = u.id WHERE h.name LIKE :q OR h.microchip_number LIKE :q OR u.first_name LIKE :q OR u.last_name LIKE :q ORDER BY h.id DESC LIMIT 10',
-            ['q' => $like]
+            'SELECT h.id, h.name, h.microchip_number, h.gender, u.first_name AS owner_name FROM horses h LEFT JOIN users u ON h.owner_user_id = u.id WHERE h.name LIKE :q OR h.microchip_number LIKE :mc OR u.first_name LIKE :q OR u.last_name LIKE :q ORDER BY h.id DESC LIMIT 10',
+            ['q' => $prefix, 'mc' => $contains]
         );
         $horses = is_array($horses) ? $horses : [];
 
         $clubs = $db->select(
             'SELECT c.id, c.name, c.city, c.phone FROM clubs c WHERE c.name LIKE :q OR c.city LIKE :q OR c.phone LIKE :q ORDER BY c.id DESC LIMIT 10',
-            ['q' => $like]
+            ['q' => $prefix]
         );
         $clubs = is_array($clubs) ? $clubs : [];
 
         $signups = $db->select(
             'SELECT s.id, s.status, c.title AS competition_title, u.first_name AS rider_first, u.last_name AS rider_last FROM signups s JOIN competitions c ON s.competition_id = c.id JOIN users u ON s.rider_user_id = u.id WHERE c.title LIKE :q OR u.first_name LIKE :q OR u.last_name LIKE :q ORDER BY s.id DESC LIMIT 10',
-            ['q' => $like]
+            ['q' => $prefix]
         );
         $signups = is_array($signups) ? $signups : [];
 

@@ -107,7 +107,7 @@ final class Bootstrap
 
         // Settings + Culture.
         $c->singleton('settings', static fn(Container $c): SettingService => new SettingService($c->get('db'), $c->get('cache')));
-        $c->singleton('culture', static fn(Container $c): CultureService => new CultureService($c->get('db'), $c->get('cache'), 'fa-IR'));
+        $c->singleton('culture', static fn(Container $c): CultureService => new CultureService($c->get('db'), $c->get('cache'), 'fa-IR', $c->get('settings')));
 
         // Logging.
         $c->singleton('log', static fn(Container $c): LogService => new LogService($c->get('logs_db'), (string) (getenv('GORGAN_LOGS_DIR') ?: BASE_PATH . '/logs'), $c->get('settings')));

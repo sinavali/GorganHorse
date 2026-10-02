@@ -40,6 +40,8 @@ final class SettingService
 {
     private Database $db;
     private CacheService $cache;
+    /** @var array<string,mixed>|null In-process memo of the full settings map. */
+    private ?array $memo = null;
     /** @var array<string,array{type:string,grp:string,label:string,help:string,default:mixed}>|null */
     private static ?array $registryCache = null;
 
@@ -239,18 +241,43 @@ final class SettingService
             ]);
             $inserted++;
         }
+        $this->memo = null;
         $this->cache->clearNamespace('settings');
         return $inserted;
     }
 
     /**
-     * Load all settings as a key => casted-value map (cached).
+     * Load all settings as a key => casted-value map.
+     *
+     * Memoised for the life of the process: dozens of get() calls per request
+     * (and 200+ on settings-heavy pages) must not touch the cache layer each
+     * time. `cache.enabled` and `cache.ttl_settings` decide whether the map is
+     * file-cached and for how long, read with one indexed point query.
      *
      * @return array<string,mixed>
      */
     public function all(): array
     {
-        return $this->cache->get('settings', 'all', 3600, function (): array {
+        if ($this->memo !== null) { return $this->memo; }
+
+        $ttl = 3600;
+        $cacheEnabled = true;
+        try {
+            $flags = $this->db->select(
+                "SELECT key, value FROM settings WHERE key IN ('cache.enabled', 'cache.ttl_settings')"
+            );
+            foreach ($flags as $flag) {
+                if (($flag['key'] ?? '') === 'cache.enabled') {
+                    $cacheEnabled = (string) ($flag['value'] ?? '1') === '1';
+                } elseif (($flag['key'] ?? '') === 'cache.ttl_settings') {
+                    $ttl = max(60, min(86400, (int) $flag['value']));
+                }
+            }
+        } catch (\Throwable) {
+            // Settings table not present yet (fresh install); defaults stand.
+        }
+
+        $loader = function (): array {
             // Registry defaults are always available (used before the schema
             // exists, e.g. by the installer, and for any not-yet-seeded key).
             $out = [];
@@ -266,7 +293,12 @@ final class SettingService
                 // Settings table not present yet (fresh install); defaults stand.
             }
             return $out;
-        });
+        };
+
+        $this->memo = ($cacheEnabled && $ttl > 0)
+            ? $this->cache->get('settings', 'all', $ttl, $loader)
+            : $loader();
+        return $this->memo;
     }
 
     /**
@@ -312,6 +344,7 @@ final class SettingService
                 'updated_at' => $now,
             ]);
         }
+        $this->memo = null;
         $this->cache->clearNamespace('settings');
     }
 

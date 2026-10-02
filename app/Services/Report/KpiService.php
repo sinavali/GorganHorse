@@ -41,9 +41,13 @@ final class KpiService
      */
     public function staffDashboard(array $user): array
     {
-        $monthStart = utc_iso(strtotime(gmdate('Y-m-01')));
-        $weekStart = utc_iso(strtotime('-7 days'));
-        $dayStart = utc_iso(strtotime('today'));
+        // All three revenue windows share one range query (covered by the
+        // payment_orders(status, verified_at) index) instead of three scans.
+        $utcToday = strtotime(gmdate('Y-m-d') . ' UTC');
+        $monthStart = utc_iso(strtotime(gmdate('Y-m-01') . ' UTC'));
+        $weekStart = utc_iso($utcToday - 7 * 86400);
+        $dayStart = utc_iso($utcToday);
+        $revenue = $this->revenues($monthStart, $weekStart, $dayStart);
 
         $data = [
             'total_riders' => (int) $this->db->scalar("SELECT COUNT(*) FROM users WHERE role='rider'"),
@@ -52,23 +56,26 @@ final class KpiService
             'horses_delta' => $this->delta7d('horses', "status='active'"),
             'total_clubs' => (int) $this->db->scalar('SELECT COUNT(*) FROM clubs'),
             'active_competitions' => (int) $this->db->scalar("SELECT COUNT(*) FROM competitions WHERE status='open'"),
-            'revenue_month' => $this->revenue($monthStart, null),
-            'revenue_week' => $this->revenue($weekStart, null),
-            'revenue_today' => $this->revenue($dayStart, null),
+            'revenue_month' => $revenue['month'],
+            'revenue_week' => $revenue['week'],
+            'revenue_today' => $revenue['today'],
             'pending_verifications' => (int) $this->db->scalar("SELECT COUNT(*) FROM users WHERE role='rider' AND verification_status='pending'"),
             'pending_confirmations' => (int) $this->db->scalar("SELECT COUNT(*) FROM signups WHERE status='paid'"),
             'pending_refunds' => (int) $this->db->scalar("SELECT COUNT(*) FROM payment_orders WHERE status='pending_refund'"),
             'active_sessions' => (int) $this->db->scalar('SELECT COUNT(*) FROM sessions WHERE expires_at > :n', ['n' => now_utc()]),
             'signups_today' => (int) $this->db->scalar('SELECT COUNT(*) FROM signups WHERE created_at >= :d', ['d' => $dayStart]),
             'pending_payments' => (int) $this->db->scalar("SELECT COUNT(*) FROM payment_orders WHERE status='pending'"),
-            'todays_competitions' => (int) $this->db->scalar('SELECT COUNT(*) FROM competitions WHERE date(start_at) = date(:n)', ['n' => now_utc()]),
+            'todays_competitions' => (int) $this->db->scalar('SELECT COUNT(*) FROM competitions WHERE start_at >= :a AND start_at < :b', ['a' => $dayStart, 'b' => utc_iso($utcToday + 86400)]),
             'signups_over_time' => $this->timeSeries('signups', 30),
             'revenue_over_time' => $this->timeSeries('revenue', 30),
             'rade_popularity' => $this->radePopularity(90),
             'recent_changelog' => $this->recentChangelog(),
-            'attention' => $this->attention((string) ($user['role'] ?? 'admin')),
+            'attention' => [],
             'is_admin' => ($user['role'] ?? '') === 'admin',
         ];
+        // attention() reuses the counters computed above instead of re-querying
+        // the same pending queues.
+        $data['attention'] = $this->attention((string) ($user['role'] ?? 'admin'), $data);
         return $data;
     }
 
@@ -78,10 +85,12 @@ final class KpiService
      * Groups the operational queues a staff member must clear today so the
      * dashboard does not just show counters but actionable, linkable lists.
      *
-     * @param string $role Viewer role.
+     * @param string $role   Viewer role.
+     * @param array  $counts Pre-computed counters from staffDashboard() so the
+     *                       same pending queues are not counted twice.
      * @return array<int,array{key:string,label:string,count:int,tone:string,path:string,icon:string}>
      */
-    public function attention(string $role): array
+    public function attention(string $role, array $counts = []): array
     {
         if ($role === 'rider' || $role === 'club') {
             return [];
@@ -95,13 +104,16 @@ final class KpiService
         };
 
         $add('verify', 'سوارکاران در انتظار تأیید',
-            (int) $this->db->scalar("SELECT COUNT(*) FROM users WHERE role='rider' AND verification_status='pending'"),
+            (int) ($counts['pending_verifications']
+                ?? $this->db->scalar("SELECT COUNT(*) FROM users WHERE role='rider' AND verification_status='pending'")),
             'b-warn', '/users?status=pending', 'i-user');
         $add('confirm', 'ثبت‌نام‌های پرداخت‌شده در انتظار تأیید',
-            (int) $this->db->scalar("SELECT COUNT(*) FROM signups WHERE status='paid'"),
+            (int) ($counts['pending_confirmations']
+                ?? $this->db->scalar("SELECT COUNT(*) FROM signups WHERE status='paid'")),
             'b-info', '/signups?status=paid', 'i-list');
         $add('refund', 'درخواست‌های استرداد',
-            (int) $this->db->scalar("SELECT COUNT(*) FROM payment_orders WHERE status='pending_refund'"),
+            (int) ($counts['pending_refunds']
+                ?? $this->db->scalar("SELECT COUNT(*) FROM payment_orders WHERE status='pending_refund'")),
             'b-bad', '/payment-orders?status=pending_refund', 'i-wallet');
         $add('deadline', 'مسابقاتی که تا ۴۸ ساعت دیگر ثبت‌نامشان بسته می‌شود',
             (int) $this->db->scalar("SELECT COUNT(*) FROM competitions WHERE status='open' AND end_registration_at BETWEEN :n AND :s",
@@ -162,7 +174,7 @@ final class KpiService
     private function recentChangelog(): array
     {
         try {
-            $logsDb = \App\Support\container('logs_db');
+            $logsDb = container('logs_db');
             if ($logsDb instanceof \App\Bootstrap\Database) {
                 return $logsDb->select('SELECT * FROM changelog ORDER BY id DESC LIMIT 20');
             }
@@ -290,18 +302,40 @@ final class KpiService
      */
     private function riderRankFor(int $userId): ?array
     {
-        $all = $this->riderRanking(1000);
-        foreach ($all as $i => $r) {
-            if ((int) $r['rider_user_id'] === $userId) {
-                return [
-                    'position' => $i + 1,
-                    'points' => (int) $r['points'],
-                    'wins' => (int) $r['wins'],
-                    'entries' => (int) $r['entries'],
-                ];
-            }
-        }
-        return null;
+        /* One CTE computes the leaderboard aggregate once, then counts how many
+           riders sort ahead of this one and adds 1 for the position. The old
+           implementation re-ran riderRanking(1000) and iterated it in PHP. */
+        $row = $this->db->selectOne(
+            "WITH ranked AS (
+                SELECT s.rider_user_id AS uid,
+                       SUM(CASE s.position WHEN 1 THEN 10 WHEN 2 THEN 6 WHEN 3 THEN 4 ELSE 2 END) AS points,
+                       SUM(CASE WHEN s.is_winner = 1 THEN 1 ELSE 0 END) AS wins,
+                       SUM(CASE WHEN s.position = 1 THEN 1 ELSE 0 END) AS firsts,
+                       COUNT(*) AS entries
+                FROM signups s
+                WHERE s.position IS NOT NULL AND s.status = 'confirmed'
+                GROUP BY s.rider_user_id
+             )
+             SELECT
+                (SELECT COUNT(*) FROM ranked a
+                  WHERE a.uid <> m.uid AND (
+                        a.points > m.points
+                     OR (a.points = m.points AND a.wins > m.wins)
+                     OR (a.points = m.points AND a.wins = m.wins AND a.firsts > m.firsts)
+                     OR (a.points = m.points AND a.wins = m.wins AND a.firsts = m.firsts AND a.entries < m.entries)
+                  )) + 1 AS position,
+                m.points AS points, m.wins AS wins, m.entries AS entries
+             FROM ranked m
+             WHERE m.uid = :u",
+            ['u' => $userId]
+        );
+        if ($row === null) { return null; }
+        return [
+            'position' => (int) $row['position'],
+            'points' => (int) $row['points'],
+            'wins' => (int) $row['wins'],
+            'entries' => (int) $row['entries'],
+        ];
     }
 
     /**
@@ -342,18 +376,32 @@ final class KpiService
     }
 
     /**
-     * Sum paid revenue in a UTC window.
+     * Sum paid revenue for the month, the trailing week and today in one pass.
      *
-     * @param string      $from UTC lower bound.
-     * @param string|null $to   UTC upper bound.
-     * @return int IRT total.
+     * @param string $monthFrom Month start (UTC ISO).
+     * @param string $weekFrom  Week start (UTC ISO).
+     * @param string $dayFrom   Day start (UTC ISO).
+     * @return array{month:int,week:int,today:int}
      */
-    private function revenue(string $from, ?string $to): int
+    private function revenues(string $monthFrom, string $weekFrom, string $dayFrom): array
     {
-        $sql = "SELECT COALESCE(SUM(amount_irt),0) FROM payment_orders WHERE status='paid' AND verified_at >= :from";
-        $params = ['from' => $from];
-        if ($to !== null) { $sql .= ' AND verified_at <= :to'; $params['to'] = $to; }
-        return (int) $this->db->scalar($sql, $params);
+        // The scan starts at the earliest of the three windows; ISO-8601 strings
+        // compare lexicographically, so min() picks it correctly.
+        $lower = min($monthFrom, $weekFrom, $dayFrom);
+        $row = $this->db->selectOne(
+            "SELECT
+                COALESCE(SUM(CASE WHEN verified_at >= :m THEN amount_irt ELSE 0 END), 0) AS month,
+                COALESCE(SUM(CASE WHEN verified_at >= :w THEN amount_irt ELSE 0 END), 0) AS week,
+                COALESCE(SUM(CASE WHEN verified_at >= :d THEN amount_irt ELSE 0 END), 0) AS today
+             FROM payment_orders
+             WHERE status = 'paid' AND verified_at >= :lower",
+            ['m' => $monthFrom, 'w' => $weekFrom, 'd' => $dayFrom, 'lower' => $lower]
+        ) ?? [];
+        return [
+            'month' => (int) ($row['month'] ?? 0),
+            'week' => (int) ($row['week'] ?? 0),
+            'today' => (int) ($row['today'] ?? 0),
+        ];
     }
 
     /**
@@ -365,15 +413,35 @@ final class KpiService
      */
     private function timeSeries(string $kind, int $days): array
     {
+        $days = max(1, $days);
+        $today = strtotime(gmdate('Y-m-d') . ' UTC');
+        $from = utc_iso($today - ($days - 1) * 86400);
+
+        /* One grouped range query per series (the old code ran one COUNT per
+           day and wrapped the column in date(), which defeats the index). */
+        if ($kind === 'signups') {
+            $rows = $this->db->select(
+                'SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n
+                 FROM signups WHERE created_at >= :from GROUP BY day',
+                ['from' => $from]
+            );
+        } else {
+            $rows = $this->db->select(
+                "SELECT substr(verified_at, 1, 10) AS day, COALESCE(SUM(amount_irt), 0) AS n
+                 FROM payment_orders WHERE status = 'paid' AND verified_at >= :from GROUP BY day",
+                ['from' => $from]
+            );
+        }
+
+        $byDay = [];
+        foreach ($rows as $row) {
+            $byDay[(string) $row['day']] = (int) $row['n'];
+        }
+
         $out = [];
         for ($i = $days - 1; $i >= 0; $i--) {
-            $day = gmdate('Y-m-d', strtotime("-$i days"));
-            if ($kind === 'signups') {
-                $v = (int) $this->db->scalar('SELECT COUNT(*) FROM signups WHERE date(created_at) = :d', ['d' => $day]);
-            } else {
-                $v = (int) $this->db->scalar("SELECT COALESCE(SUM(amount_irt),0) FROM payment_orders WHERE status='paid' AND date(verified_at) = :d", ['d' => $day]);
-            }
-            $out[] = ['date' => $day, 'value' => $v];
+            $day = gmdate('Y-m-d', $today - $i * 86400);
+            $out[] = ['date' => $day, 'value' => $byDay[$day] ?? 0];
         }
         return $out;
     }

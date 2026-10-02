@@ -96,7 +96,8 @@ final class ReportEngine
         $columns = $this->normalizeColumns($report, (array) ($input['columns'] ?? []));
 
         $total = $report->count($this->db, $report->scopeFilters($actor));
-        $filtered = $report->count($this->db, $filters);
+        // Without user filters the two counts are identical; run one query.
+        $filtered = $filters === [] ? $total : $report->count($this->db, $filters);
         $rows = $report->fetch($this->db, $filters, $sort, $page, $perPage);
 
         $projected = [];
@@ -141,7 +142,7 @@ final class ReportEngine
             $full = $report->project($row, $this->db);
             $projected[] = $columns === [] ? $full : array_intersect_key($full, array_flip($columns));
         }
-        $format = in_array(($input['format'] ?? 'csv'), ['csv', 'xlsx'], true) ? (string) $input['format'] : 'csv';
+        $format = in_array(($input['format'] ?? 'csv'), ['csv', 'xlsx'], true) ? (string) ($input['format'] ?? 'csv') : 'csv';
         return [
             'filename' => $key . '-' . gmdate('Ymd-His') . '.' . $format,
             'format' => $format,
@@ -162,22 +163,46 @@ final class ReportEngine
      */
     public function toCsv(array $payload): string
     {
-        /* Never let a share code leave through a report export: the codes are
-           secrets that authorise handing a horse to someone else, and a CSV is
-           forwarded by email far more freely than the panel is. */
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) { return ''; }
+        $this->writeCsv($payload, $handle);
+        rewind($handle);
+        $out = (string) stream_get_contents($handle);
+        fclose($handle);
+        return $out;
+    }
+
+    /**
+     * Stream a CSV export straight into an open file handle.
+     *
+     * The export path used to build one multi-megabyte string in memory
+     * (`toCsv`) and then write it with file_put_contents; writing rows with
+     * fputcsv keeps only one row in memory at a time.
+     *
+     * Cells go through CultureService::exportCell() so timestamps land in the
+     * file as the same readable dates the report shows on screen, and share
+     * codes stay redacted (they are secrets that authorise handing a horse to
+     * someone else).
+     *
+     * @param array    $payload Export payload (columns + rows).
+     * @param resource $handle  Writable file handle.
+     * @return void
+     */
+    public function writeCsv(array $payload, $handle): void
+    {
+        if (!is_resource($handle)) { return; }
         $keys = array_map(static fn (array $c): string => (string) $c['key'], $payload['columns']);
         $labels = array_map(static fn (array $c): string => (string) $c['label'], $payload['columns']);
-        $out = "\xEF\xBB\xBF" . implode(',', array_map(static fn ($l) => '"' . str_replace('"', '""', $l) . '"', $labels)) . "\n";
+        fwrite($handle, "\xEF\xBB\xBF");
+        fputcsv($handle, $labels, ',', '"', '');
         foreach ($payload['rows'] as $row) {
             $line = [];
             foreach ($keys as $k) {
                 $raw = $row[$k] ?? '';
-                $cell = self::isSecretColumn($k) ? '' : $this->culture->exportCell($raw);
-                $line[] = '"' . str_replace('"', '""', $cell) . '"';
+                $line[] = self::isSecretColumn($k) ? '' : $this->culture->exportCell($raw);
             }
-            $out .= implode(',', $line) . "\n";
+            fputcsv($handle, $line, ',', '"', '');
         }
-        return $out;
     }
 
     /**
