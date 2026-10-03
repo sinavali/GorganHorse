@@ -71,7 +71,7 @@ final class HttpRoutesAndControllersTest
 
         // Captcha issue
         $guestCsrf = $c->get('guest_csrf');
-        $captchaReq = self::makeRequest('POST', '/captcha/issue', [], ['accept' => 'application/json'], ['guest_csrf' => $guestCsrf]);
+        $captchaReq = self::makeRequest('POST', '/captcha/issue', ['_csrf' => $guestCsrf], ['accept' => 'application/json', 'x-csrf-token' => $guestCsrf], ['guest_csrf' => $guestCsrf]);
         $res3 = $kernel->process($captchaReq);
         assert($res3->status() === 200);
         $capData = json_decode($res3->body(), true);
@@ -83,21 +83,24 @@ final class HttpRoutesAndControllersTest
             'identifier' => 'admin',
             'password' => 'admin12345',
             '_csrf' => $guestCsrf,
-        ], ['accept' => 'application/json'], ['guest_csrf' => $guestCsrf]);
+        ], ['accept' => 'application/json', 'user-agent' => 'PHPUnit/Test'], ['guest_csrf' => $guestCsrf]);
         $resLogin = $kernel->process($loginPost);
         assert($resLogin->status() === 200);
         $loginJson = json_decode($resLogin->body(), true);
         assert(isset($loginJson['data']['redirect']));
 
         $db = $c->get('db');
-        $sessRow = $db->selectOne('SELECT id FROM sessions WHERE user_id = 1 ORDER BY created_at DESC LIMIT 1');
+        $sessRow = $db->selectOne("SELECT s.id, s.payload FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.username = 'admin' ORDER BY s.created_at DESC LIMIT 1");
         $sessId = $sessRow['id'] ?? '';
+        $payload = json_decode((string) ($sessRow['payload'] ?? '{}'), true);
+        $sessCsrf = $payload['csrf_token'] ?? '';
 
         // Helper to create authenticated JSON API requests
-        $apiReq = function (string $method, string $path, array $data = []) use ($sessId, $kernel) {
+        $apiReq = function (string $method, string $path, array $data = []) use ($sessId, $sessCsrf, $kernel) {
             $req = self::makeRequest($method, $path, $data, [
                 'accept' => 'application/json',
                 'user-agent' => 'PHPUnit/Test',
+                'x-csrf-token' => $sessCsrf,
             ], ['session_id' => $sessId]);
             return $kernel->process($req);
         };

@@ -38,7 +38,7 @@ var src = fs.readFileSync(UI_JS, 'utf8');
 /* Reuse the brace-matching extractor from the sibling suite so both tests
    exercise the shipped source rather than a copy. */
 var extractFn = new Function(
-  'return ' + testSrc.match(/function extractFn[\s\S]*?\n}\n/)[0].replace('function extractFn', 'function extractFn')
+  'return ' + testSrc.match(/function extractFn[\s\S]*?\r?\n}\r?\n/)[0].replace('function extractFn', 'function extractFn')
 )();
 
 global.document = dom.documentStub;

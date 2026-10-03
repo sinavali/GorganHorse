@@ -399,7 +399,33 @@ final class UserService
         $user = $this->db->selectOne('SELECT id, role, username FROM users WHERE id = :id', ['id' => $id]);
         if ($user === null) { throw new NotFoundException('User not found', 'USER_NOT_FOUND'); }
         $this->db->transaction(function () use ($id, $actor, $user): void {
-            $this->db->delete('users', 'id = :id', ['id' => $id]);
+            $hasSignups = (int) $this->db->scalar('SELECT COUNT(*) FROM signups WHERE rider_user_id = :id', ['id' => $id]) > 0;
+            $hasOrders = (int) $this->db->scalar('SELECT COUNT(*) FROM payment_orders WHERE user_id = :id', ['id' => $id]) > 0;
+
+            if ($hasSignups || $hasOrders) {
+                // Archive and unbind user: preserve historical report data (first_name, last_name, signups, orders)
+                // but wipe private data, credentials, and unique fields so the user can re-register later if desired.
+                $this->db->delete('sessions', 'user_id = :id', ['id' => $id]);
+                $this->db->delete('notifications', 'user_id = :id', ['id' => $id]);
+                $this->db->delete('rider_profiles', 'user_id = :id', ['id' => $id]);
+                $this->db->delete('club_bans', 'user_id = :id', ['id' => $id]);
+
+                $archivedUsername = 'archived_' . $id . '_' . substr(md5(uniqid((string) $id, true)), 0, 8);
+                $this->db->update('users', [
+                    'username' => $archivedUsername,
+                    'phone' => null,
+                    'email' => null,
+                    'national_id' => null,
+                    'password_hash' => '*',
+                    'disable_state' => 'full',
+                    'disable_reason' => 'حساب کاربری حذف و بایگانی شد',
+                    'avatar_media_id' => null,
+                    'updated_at' => now_utc(),
+                ], 'id = :id', ['id' => $id]);
+            } else {
+                $this->db->delete('users', 'id = :id', ['id' => $id]);
+            }
+
             $this->record($actor, 'user.delete', 'user', $id, ['username' => $user['username']]);
             $this->log->changelog([
                 'actor_id' => $actor['id'], 'actor_role' => $actor['role'], 'action' => 'user.delete',

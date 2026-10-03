@@ -73,6 +73,17 @@ final class PhoneValidator
     }
 
     /**
+     * Alias for isValidMobile.
+     *
+     * @param string $input Raw input.
+     * @return bool
+     */
+    public static function isValid(string $input): bool
+    {
+        return self::isValidMobile($input);
+    }
+
+    /**
      * Validate the Iranian national-ID (کد ملی) 10-digit check algorithm.
      *
      * @param string $input Raw input (Persian/Latin digits).

@@ -73,6 +73,16 @@ $mainMigrations = [
             $db->execute('ALTER TABLE competitions ADD COLUMN announcement_required INTEGER NOT NULL DEFAULT 0');
         }
     },
+    'rate_limits table rebuild' => static function ($db): void {
+        $sql = (string) $db->scalar("SELECT sql FROM sqlite_master WHERE type='table' AND name='rate_limits'");
+        if (str_contains($sql, 'UNIQUE (bucket)') || str_contains($sql, 'UNIQUE(bucket)')) {
+            $db->execute('CREATE TABLE rate_limits_new (id INTEGER PRIMARY KEY AUTOINCREMENT, bucket TEXT NOT NULL, hits INTEGER NOT NULL DEFAULT 1, window_start TEXT NOT NULL, updated_at TEXT NOT NULL)');
+            $db->execute('INSERT INTO rate_limits_new (id, bucket, hits, window_start, updated_at) SELECT id, bucket, hits, window_start, updated_at FROM rate_limits');
+            $db->execute('DROP TABLE rate_limits');
+            $db->execute('ALTER TABLE rate_limits_new RENAME TO rate_limits');
+            $db->execute('CREATE INDEX IF NOT EXISTS idx_rate_limits_bucket_window ON rate_limits(bucket, window_start)');
+        }
+    },
 ];
 
 $container = Bootstrap::container();

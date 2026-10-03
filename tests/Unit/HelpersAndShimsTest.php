@@ -80,7 +80,7 @@ final class HelpersAndShimsTest
             $tmpImg = BASE_PATH . '/cache/test_img.png';
             $im = imagecreatetruecolor(100, 100);
             imagepng($im, $tmpImg);
-            imagedestroy($im);
+            @imagedestroy($im);
 
             $thumb = BASE_PATH . '/cache/test_thumb.png';
             ImageProcessor::thumbnail($tmpImg, $thumb, 50, 50);

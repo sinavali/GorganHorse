@@ -319,11 +319,11 @@ Edit policy:
 
 ### Feature: Global Entity Search
 
-- Status: Not Implemented
-- Description: Unified search bar in the topbar for searching across all entities — competitions, riders, horses, clubs, signups — by name, phone, microchip, or other identifiers. Currently the topbar describes a "Global search (spotlight)" in the spec (§5.3) but no search route, controller, or view exists. Users must navigate to individual entity pages to use their specific search filters.
-- Notes: Would need a unified search controller, route, and search index. Could use SQLite FTS5 for performance.
-- Considerations: A global search would dramatically improve usability for admins and managers who work across all entity types daily.
-- Status Description: Not implemented. The topbar spec mentions global search but no search endpoint, controller, or view exists. Users must use entity-specific filters.
+- Status: Implemented
+- Description: Unified search bar in the topbar for searching across all entities — competitions, riders, horses, clubs, signups — by name, phone, microchip, or other identifiers.
+- Notes: Implemented via SearchController (GET /api/search) and integrated into topbar spotlight search with role-based filtering across riders, horses, clubs, competitions, and signups.
+- Considerations: Dramatically improves usability for admins and managers who work across all entity types daily.
+- Status Description: Implemented. Unified /api/search endpoint with multi-entity support and role-scoped results.
 
 ---
 

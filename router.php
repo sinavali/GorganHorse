@@ -42,8 +42,9 @@ $mimes = [
 
 /** Serve an existing file under public/ with its MIME type. */
 if ($uri !== '/') {
-    $file = __DIR__ . '/public' . $uri;
-    if (is_file($file)) {
+    $publicDir = realpath(__DIR__ . '/public');
+    $file = realpath(__DIR__ . '/public' . $uri);
+    if ($publicDir !== false && $file !== false && str_starts_with($file, $publicDir . DIRECTORY_SEPARATOR) && is_file($file)) {
         $ext = strtolower((string) pathinfo($file, PATHINFO_EXTENSION));
         header('Content-Type: ' . ($mimes[$ext] ?? 'application/octet-stream'));
         header('Content-Length: ' . (string) filesize($file));

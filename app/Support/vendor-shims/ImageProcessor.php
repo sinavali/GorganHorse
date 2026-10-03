@@ -72,8 +72,8 @@ final class ImageProcessor
         }
 
         self::save($canvas, $targetPath, $targetMime, $quality);
-        imagedestroy($canvas);
-        imagedestroy($source);
+        @imagedestroy($canvas);
+        @imagedestroy($source);
 
         return ['path' => $targetPath, 'mime' => $targetMime, 'width' => $newWidth, 'height' => $newHeight];
     }
@@ -121,25 +121,54 @@ final class ImageProcessor
     }
 
     /**
-     * Generate a square thumbnail (used by the thumbs cache namespace).
+     * Generate a square thumbnail.
      *
-     * @param string $path Source path.
-     * @param string $mime Source MIME.
-     * @param int    $size Thumbnail edge size in pixels.
-     * @return \GdImage|null
+     * Supports:
+     * - (string $srcPath, string $dstPath, int $width, int $height): bool (saves to disk)
+     * - (string $path, string $mime, int $size): ?\GdImage (returns GD image)
+     *
+     * @param string $path   Source path.
+     * @param string $target Destination path or MIME type.
+     * @param int    $width  Width or edge size in pixels.
+     * @param int    $height Height in pixels.
+     * @return mixed
      */
-    public static function thumbnail(string $path, string $mime, int $size = 200): ?\GdImage
+    public static function thumbnail(string $path, string $target, int $width = 200, int $height = 200): mixed
     {
+        if (str_starts_with($target, 'image/')) {
+            $mime = $target;
+            $size = $width;
+            $source = self::create($path, $mime);
+            if ($source === null) { return null; }
+            $w = imagesx($source);
+            $h = imagesy($source);
+            $edge = min($w, $h);
+            $srcX = (int) (($w - $edge) / 2);
+            $srcY = (int) (($h - $edge) / 2);
+            $thumb = imagecreatetruecolor($size, $size);
+            imagecopyresampled($thumb, $source, 0, 0, $srcX, $srcY, $size, $size, $edge, $edge);
+            imagedestroy($source);
+            return $thumb;
+        }
+
+        $dstPath = $target;
+        $mime = (string) (@mime_content_type($path) ?: 'image/png');
         $source = self::create($path, $mime);
-        if ($source === null) { return null; }
-        $width = imagesx($source);
-        $height = imagesy($source);
-        $edge = min($width, $height);
-        $srcX = (int) (($width - $edge) / 2);
-        $srcY = (int) (($height - $edge) / 2);
-        $thumb = imagecreatetruecolor($size, $size);
-        imagecopyresampled($thumb, $source, 0, 0, $srcX, $srcY, $size, $size, $edge, $edge);
-        imagedestroy($source);
-        return $thumb;
+        if ($source === null) { return false; }
+        $w = imagesx($source);
+        $h = imagesy($source);
+        $edge = min($w, $h);
+        $srcX = (int) (($w - $edge) / 2);
+        $srcY = (int) (($h - $edge) / 2);
+        $thumb = imagecreatetruecolor($width, $height);
+        if (in_array($mime, ['image/png', 'image/webp', 'image/gif'], true)) {
+            imagealphablending($thumb, false);
+            imagesavealpha($thumb, true);
+        }
+        imagecopyresampled($thumb, $source, 0, 0, $srcX, $srcY, $width, $height, $edge, $edge);
+        self::save($thumb, $dstPath, $mime, 85);
+        @imagedestroy($thumb);
+        @imagedestroy($source);
+        return is_file($dstPath);
     }
 }

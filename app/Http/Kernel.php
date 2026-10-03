@@ -134,7 +134,7 @@ final class Kernel
                     if (($r = Middleware::role($ctx, $roles)) !== null) { return $this->finalize($r, $ctx); }
                 }
                 if (str_starts_with($key, 'rate:')) {
-                    Middleware::rateLimit($ctx, substr($key, 5));
+                    if (($r = Middleware::rateLimit($ctx, substr($key, 5))) !== null) { return $this->finalize($r, $ctx); }
                 }
             }
 

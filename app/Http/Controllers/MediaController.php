@@ -42,11 +42,22 @@ final class MediaController extends BaseController
             return $this->fail('NOT_FOUND', 'Media not found', $ctx, 404);
         }
 
-        $relative = ltrim((string) ($media['path'] ?? ''), '/');
+        // Access control: admins, managers, or media owner; or public assets
+        $isStaff = $ctx->hasRole('admin', 'super_admin', 'manager');
+        $isOwner = ((int) ($media['owner_user_id'] ?? 0) === (int) ($ctx->user['id'] ?? 0));
+        $isPublic = in_array($media['kind'] ?? '', ['horse_avatar', 'competition_banner', 'club_logo', 'news_banner'], true);
+        if (!$isStaff && !$isOwner && !$isPublic) {
+            return $this->fail('FORBIDDEN', 'Access denied to this media file', $ctx, 403);
+        }
+
+        $relative = ltrim((string) ($media['path'] ?? ''), '/\\');
         $base = realpath(BASE_PATH . '/uploads');
         $real = realpath(BASE_PATH . '/' . $relative);
+        $baseNorm = rtrim(str_replace('\\', '/', (string) $base), '/') . '/';
+        $realNorm = str_replace('\\', '/', (string) $real);
+
         // Defence in depth: never serve anything outside the uploads directory.
-        if ($base === false || $real === false || !str_starts_with($real, $base . '/') || !is_file($real)) {
+        if ($base === false || $real === false || !str_starts_with($realNorm, $baseNorm) || !is_file($real)) {
             return $this->fail('NOT_FOUND', 'Media not found', $ctx, 404);
         }
 

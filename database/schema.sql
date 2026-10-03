@@ -646,11 +646,11 @@ CREATE TABLE IF NOT EXISTS cultures (
 CREATE TABLE IF NOT EXISTS rate_limits (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     bucket     TEXT NOT NULL,                               -- bucket key (route + identity hash)
-    hits       INTEGER NOT NULL DEFAULT 0,                  -- hit count in the window
-    window_start TEXT NOT NULL,                             -- UTC window start
-    updated_at TEXT NOT NULL,                               -- UTC last update
-    UNIQUE (bucket)
+    hits       INTEGER NOT NULL DEFAULT 1,                  -- hit count
+    window_start TEXT NOT NULL,                             -- UTC hit timestamp
+    updated_at TEXT NOT NULL                                -- UTC last update
 );
+CREATE INDEX IF NOT EXISTS idx_rate_limits_bucket_window ON rate_limits(bucket, window_start);
 
 -- -----------------------------------------------------------------------------
 -- password_resets

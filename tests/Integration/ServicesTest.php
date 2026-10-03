@@ -87,7 +87,7 @@ final class ServicesTest
         // 5. AuthService
         $auth = $c->get('auth');
         $userRow = $auth->login('admin', 'admin12345', '127.0.0.1', 'TestAgent');
-        assert($userRow['username'] === 'admin');
+        assert($userRow['user']['username'] === 'admin');
 
         $regPhone = '0912' . random_digits(7);
         $newRiderAcc = $auth->signup([

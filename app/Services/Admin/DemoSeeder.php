@@ -711,6 +711,13 @@ final class DemoSeeder
      * @param string $verification Verification status.
      * @return int User id (0 when it already exists).
      */
+    private static ?string $cachedDemoHash = null;
+
+    private function demoHash(): string
+    {
+        return self::$cachedDemoHash ??= password_hash('demo12345', PASSWORD_DEFAULT);
+    }
+
     private function insertUser(string $role, string $name, string $city, string $username, string $now, string $verification = 'verified'): int
     {
         if ((int) $this->db->scalar('SELECT COUNT(*) FROM users WHERE username = :u', ['u' => $username]) > 0) {
@@ -719,7 +726,7 @@ final class DemoSeeder
         return $this->db->insert('users', [
             'uuid' => uuid4(), 'role' => $role, 'username' => $username,
             'phone' => $this->phone(), 'email' => null,
-            'password_hash' => password_hash('demo12345', PASSWORD_DEFAULT),
+            'password_hash' => $this->demoHash(),
             'first_name' => $name, 'last_name' => self::LAST_NAMES[random_int(0, count(self::LAST_NAMES) - 1)],
             'national_id' => $this->nationalId(), 'avatar_media_id' => null,
             'disable_state' => 'none', 'verification_status' => $verification, 'auto_verify_at' => null,

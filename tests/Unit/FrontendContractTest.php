@@ -87,7 +87,8 @@ final class FrontendContractTest
     {
         $out = [];
         $code = 0;
-        @exec('command -v node 2>/dev/null', $out, $code);
+        $cmd = PHP_OS_FAMILY === 'Windows' ? 'where.exe node 2>nul' : 'command -v node 2>/dev/null';
+        @exec($cmd, $out, $code);
         $path = trim((string) ($out[0] ?? ''));
         return ($code === 0 && $path !== '') ? $path : null;
     }

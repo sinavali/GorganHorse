@@ -133,8 +133,11 @@ final class HtmlSanitizer
                 }
                 foreach (iterator_to_array($child->attributes) as $attr) {
                     $name = strtolower($attr->nodeName);
-                    if (str_starts_with($name, 'on') || $name === 'href') {
-                        $child->removeAttribute($attr->nodeName);
+                    if (str_starts_with($name, 'on') || $name === 'href' || str_ends_with($name, 'href')) {
+                        $val = trim($attr->value);
+                        if (!str_starts_with($val, '#')) {
+                            $child->removeAttribute($attr->nodeName);
+                        }
                     }
                 }
                 self::walkSvg($child);
@@ -154,7 +157,12 @@ final class HtmlSanitizer
         if ($url === '') { return false; }
         if (str_starts_with($url, '/') || str_starts_with($url, '#') || str_starts_with($url, '?')) { return true; }
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
-        return in_array($scheme, ['http', 'https', 'mailto', 'tel', 'data'], true)
-            && !str_starts_with(strtolower($url), 'data:text/html');
+        if (in_array($scheme, ['http', 'https', 'mailto', 'tel'], true)) {
+            return true;
+        }
+        if ($scheme === 'data') {
+            return (bool) preg_match('/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]+$/i', $url);
+        }
+        return false;
     }
 }
