@@ -73,9 +73,12 @@ function renderShell(){
   app.innerHTML=UI.sprite
     +'<a class="skip" href="#view">پرش به محتوای اصلی</a>'
     +'<div id="side">'
-    +'<div style="padding:14px 14px 10px"><div class="row gap2">'
+    +'<div style="padding:14px 14px 10px"><div class="row gap2 jb">'
+    +'<div class="row gap2">'
     +'<span class="av" style="width:34px;height:34px;border-radius:10px;background:linear-gradient(140deg,#1d8f5f,#0c3b28)">'+UI.ic('i-horse')+'</span>'
     +'<div><div style="color:#fff;font-weight:700;font-size:13px">هیئت سوارکاری گلستان</div><div style="color:var(--side-muted);font-size:10px">سامانه مدیریت</div></div>'
+    +'</div>'
+    +'<button class="btn-i side-close-btn" id="sideClose" style="color:var(--side-muted)" title="بستن منو">'+UI.ic('i-x2')+'</button>'
     +'</div></div>'
     +'<div class="scroll" style="padding:4px 10px;flex:1" id="navHost"></div>'
     +'<div class="sideprof"><div class="row gap2">'
@@ -102,14 +105,18 @@ function renderShell(){
     +'</div>';
 
   drawNav();
-  document.getElementById('burger').addEventListener('click',function(){
-    document.getElementById('side').classList.toggle('open');
-    document.getElementById('sbd').classList.toggle('on');
-  });
-  document.getElementById('sbd').addEventListener('click',function(){
-    document.getElementById('side').classList.remove('open');
-    document.getElementById('sbd').classList.remove('on');
-  });
+  function toggleSidebar(open){
+    var side=document.getElementById('side');
+    var sbd=document.getElementById('sbd');
+    var isOpen=typeof open==='boolean'?open:!side.classList.contains('open');
+    if(side){side.classList.toggle('open',isOpen);}
+    if(sbd){sbd.classList.toggle('on',isOpen);}
+    document.body.classList.toggle('side-open',isOpen);
+  }
+  document.getElementById('burger').addEventListener('click',function(){toggleSidebar();});
+  document.getElementById('sbd').addEventListener('click',function(){toggleSidebar(false);});
+  var sideClose=document.getElementById('sideClose');
+  if(sideClose){sideClose.addEventListener('click',function(){toggleSidebar(false);});}
   document.getElementById('logoutB').addEventListener('click',function(){
     UI.confirm('از سامانه خارج می‌شوید؟',function(){
       API.post('/auth/logout',{}).then(function(){App.enter();});
@@ -212,6 +219,7 @@ function closeSidebar(){
   var sbd=document.getElementById('sbd');
   if(side){side.classList.remove('open');}
   if(sbd){sbd.classList.remove('on');}
+  document.body.classList.remove('side-open');
 }
 function markActive(){
   var key=currentKey();
@@ -602,6 +610,7 @@ function renderInto(key,id,sub){
   setAutoCrumbs(key,id);
   markActive();
   UI.closeDialog();
+  closeSidebar();
   view.className='fade-in';
   /* A throwing page must never leave a blank screen: show a recoverable
      panel with the reason and a retry button instead. */
