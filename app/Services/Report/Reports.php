@@ -290,9 +290,9 @@ final class SignupsReport extends BaseReport
     public function filters(): array
     {
         return [
-            ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'int', 'sql' => 's.competition_id', 'operators' => ['eq']],
-            ['key' => 'rade_id', 'label' => 'رده', 'type' => 'int', 'sql' => 's.rade_id', 'operators' => ['eq']],
-            ['key' => 'club_id', 'label' => 'باشگاه', 'type' => 'int', 'sql' => 's.affiliation_club_id', 'operators' => ['eq']],
+            ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'entity', 'entity' => 'competitions', 'sql' => 's.competition_id', 'operators' => ['eq']],
+            ['key' => 'rade_id', 'label' => 'رده', 'type' => 'entity', 'entity' => 'rades', 'sql' => 's.rade_id', 'operators' => ['eq']],
+            ['key' => 'club_id', 'label' => 'باشگاه', 'type' => 'entity', 'entity' => 'clubs', 'sql' => 's.affiliation_club_id', 'operators' => ['eq']],
             ['key' => 'status', 'label' => 'وضعیت', 'type' => 'enum', 'sql' => 's.status', 'operators' => ['in', 'eq'], 'options' => ['pending_payment', 'paid', 'confirmed', 'rejected', 'cancelled', 'withdrawn']],
             ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
             ['key' => 'horse', 'label' => 'اسب', 'type' => 'string', 'sql' => 'h.name', 'operators' => ['contains']],
@@ -390,7 +390,7 @@ final class RevenueReport extends BaseReport
     public function filters(): array
     {
         return [
-            ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'int', 'sql' => 'po.competition_id', 'operators' => ['eq']],
+            ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'entity', 'entity' => 'competitions', 'sql' => 'po.competition_id', 'operators' => ['eq']],
             ['key' => 'status', 'label' => 'وضعیت', 'type' => 'enum', 'sql' => 'po.status', 'operators' => ['in', 'eq'], 'options' => ['pending', 'paid', 'failed', 'pending_refund', 'refunded']],
             ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
             ['key' => 'city', 'label' => 'شهر', 'type' => 'string', 'sql' => 'c.city', 'operators' => ['contains']],
@@ -458,8 +458,8 @@ final class ResultsReport extends BaseReport
     public function filters(): array
     {
         return [
-            ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'int', 'sql' => 's.competition_id', 'operators' => ['eq']],
-            ['key' => 'rade_id', 'label' => 'رده', 'type' => 'int', 'sql' => 's.rade_id', 'operators' => ['eq']],
+            ['key' => 'competition_id', 'label' => 'مسابقه', 'type' => 'entity', 'entity' => 'competitions', 'sql' => 's.competition_id', 'operators' => ['eq']],
+            ['key' => 'rade_id', 'label' => 'رده', 'type' => 'entity', 'entity' => 'rades', 'sql' => 's.rade_id', 'operators' => ['eq']],
             ['key' => 'winner', 'label' => 'برنده', 'type' => 'bool', 'sql' => 's.is_winner', 'operators' => ['eq']],
             ['key' => 'rider', 'label' => 'سوارکار', 'type' => 'string', 'sql' => "(u.first_name || ' ' || u.last_name)", 'operators' => ['contains']],
             ['key' => 'horse', 'label' => 'اسب', 'type' => 'string', 'sql' => 'h.name', 'operators' => ['contains']],

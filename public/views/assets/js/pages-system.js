@@ -300,26 +300,43 @@ Pages.reports={
       }
       function preset(){return presets.filter(function(p){return p.key===state.report;})[0];}
       /* Value editor for one advanced row, chosen by column type + operator. */
-      function valueEditor(def,f){
+      function valueEditor(def,f,idx){
         var op=f.op||'eq';
         var name='data-adv="'+UI.esc(f.col)+'"';
+        var v=Array.isArray(f.value)?f.value:(f.value!=null?[f.value]:[]);
         if(def.type==='enum'&&(def.options||[]).length){
           return '<select class="sel" '+name+' style="width:auto">'
             +'<option value="">—</option>'
-            +def.options.map(function(o){return '<option value="'+UI.esc(o)+'"'+((Array.isArray(f.value)?f.value.join(','):f.value)===o?' selected':'')+'>'+UI.esc(enumLabel(o))+'</option>';}).join('')
+            +def.options.map(function(o){return '<option value="'+UI.esc(o)+'"'+((v.join(','))===o?' selected':'')+'>'+UI.esc(enumLabel(o))+'</option>';}).join('')
             +'</select>';
         }
+        if(def.type==='entity'){
+          var idKey='adv_'+f.col+'_'+idx;
+          return '<div class="spk" data-spk="'+UI.esc(idKey)+'" data-adv-entity="'+UI.esc(def.entity)+'">'
+            +'<input type="hidden" '+name+' value="'+UI.esc(v[0]||'')+'"/>'
+            +'<div class="spk-ctl"><input class="inp spk-inp" type="text" autocomplete="off" role="combobox" aria-expanded="false" placeholder="جستجوی '+UI.esc(def.label)+'…"/>'
+            +'<button type="button" class="spk-clear" title="پاک‌کردن" hidden>'+UI.ic('i-x2')+'</button>'
+            +'<span class="spk-arrow">'+UI.ic('i-cr')+'</span></div>'
+            +'<div class="spk-pop" hidden></div>'
+            +'</div>';
+        }
         if(op==='in'){
-          return '<input class="inp" '+name+' style="width:auto" placeholder="مقدار،مقدار دوم" value="'+UI.esc(Array.isArray(f.value)?f.value.join(','):(f.value||''))+'"/>';
+          return '<input class="inp" '+name+' style="width:auto" placeholder="مقدار،مقدار دوم" value="'+UI.esc(v.join(','))+'"/>';
         }
         if(op==='between'){
-          var v=Array.isArray(f.value)?f.value:['',''];
-          var t=def.type==='datetime'?'date':(def.type==='int'?'number':'text');
+          if(def.type==='datetime'){
+            return '<input class="inp" '+name+' data-date readonly data-di="0" style="width:auto" placeholder="از تاریخ" data-iso="'+UI.esc(v[0]||'')+'" value="'+UI.esc(I18N.fmtDate(v[0]||''))+'"/>'
+              +'<input class="inp" '+name+' data-date readonly data-di="1" style="width:auto" placeholder="تا تاریخ" data-iso="'+UI.esc(v[1]||'')+'" value="'+UI.esc(I18N.fmtDate(v[1]||''))+'"/>';
+          }
+          var t=def.type==='int'?'number':'text';
           return '<input class="inp" type="'+t+'" '+name+' data-di="0" style="width:auto" value="'+UI.esc(String(v[0]||'').slice(0,10))+'"/>'
             +'<input class="inp" type="'+t+'" '+name+' data-di="1" style="width:auto" value="'+UI.esc(String(v[1]||'').slice(0,10))+'"/>';
         }
+        if(def.type==='datetime'){
+          return '<input class="inp" '+name+' data-date readonly style="width:auto" placeholder="انتخاب تاریخ" data-iso="'+UI.esc(v[0]||'')+'" value="'+UI.esc(I18N.fmtDate(v[0]||''))+'"/>';
+        }
         var t=def.type==='int'?'number':'text';
-        return '<input class="inp" type="'+t+'" '+name+' style="width:auto" placeholder="مقدار" value="'+UI.esc(Array.isArray(f.value)?f.value[0]:(f.value==null?'':f.value))+'"/>';
+        return '<input class="inp" type="'+t+'" '+name+' style="width:auto" placeholder="مقدار" value="'+UI.esc(v[0]||'')+'"/>';
       }
       function drawAdv(){
         var box=host.querySelector('#advRows');
@@ -339,10 +356,21 @@ Pages.reports={
             +'<select class="sel" data-op style="width:auto">'+ops.map(function(o){
               return '<option value="'+o+'"'+(o===f.op?' selected':'')+'>'+UI.esc(opLabel(o))+'</option>';
             }).join('')+'</select>'
-            +valueEditor(def,f)
+            +valueEditor(def,f,i)
             +'<button type="button" class="btn btn-g btn-sm" data-del title="حذف">'+UI.ic('i-x2')+'</button>'
             +'</div>';
         }).join('');
+        var advReg = {};
+        box.querySelectorAll('[data-adv-entity]').forEach(function(spk){
+          var entity = spk.dataset.advEntity;
+          var key = spk.dataset.spk;
+          if (entity === 'competitions') { advReg[key] = {load: UI.spkFromApi('/panel/competitions', function(c){return c.title;})}; }
+          else if (entity === 'clubs') { advReg[key] = {load: UI.spkFromApi('/panel/clubs', function(c){return c.name;})}; }
+          else if (entity === 'rades') { advReg[key] = {load: UI.spkFromApi('/panel/rades', function(r){return r.name;})}; }
+          else if (entity === 'users') { advReg[key] = {load: UI.spkFromApi('/panel/users', function(u){return u.first_name+' '+u.last_name+' ('+u.username+')';})}; }
+        });
+        UI.initPicks(box, advReg);
+        UI.initPickers(box);
         box.querySelectorAll('[data-row]').forEach(function(row){
           var i=+row.dataset.row;
           row.querySelector('[data-col]').addEventListener('change',function(){
@@ -361,13 +389,15 @@ Pages.reports={
               var f=state.adv[i];
               if(f.op==='between'){
                 var a=Array.isArray(f.value)?f.value.slice():['',''];
-                a[+this.dataset.di]=this.value;
+                if(inp.hasAttribute('data-iso')) { a[+this.dataset.di]=this.dataset.iso||''; }
+                else { a[+this.dataset.di]=this.value; }
                 f.value=a;
               }else if(f.op==='in'){
                 f.value=this.value;
               }else{
                 var d=defOf(f.col);
-                f.value=(d&&d.type==='int')?(this.value===''?'':parseInt(this.value,10)):this.value;
+                if(inp.hasAttribute('data-iso')){ f.value=this.dataset.iso||''; }
+                else { f.value=(d&&d.type==='int')?(this.value===''?'':parseInt(this.value,10)):this.value; }
               }
               syncUrl();drawChips();run();
             });
